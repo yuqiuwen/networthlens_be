@@ -1,0 +1,80 @@
+[project]
+name = "networthlens-be"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "bcrypt>=5.0.0",
+    "celery>=5.6.3",
+    "cryptography>=48.0.0",
+    "fastapi>=0.136.3",
+    "gevent>=26.5.0",
+    "itsdangerous>=2.2.0",
+    "jinja2>=3.1.6",
+    "msgspec>=0.21.1",
+    "pandas>=3.0.3",
+    "pre-commit>=4.6.0",
+    "pydantic-ai>=1.107.0",
+    "pydantic-settings>=2.14.1",
+    "pydantic[email]>=2.13.4",
+    "python-dateutil>=2.9.0.post0",
+    "python-dotenv>=1.2.2",
+    "python-jose>=3.5.0",
+    "python-redis-lock>=4.0.1",
+    "python-socketio>=5.16.2",
+    "python-ulid>=3.1.0",
+    "redis>=8.0.0",
+    "slowapi>=0.1.9",
+    "sqlalchemy>=2.0.50",
+    "typer>=0.26.7",
+    "uvicorn>=0.48.0",
+]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "tests/*"
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E226", "E401", "W292", "E712", "F405", "F403", "F401", "E731"]
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"  # use double quotes for strings.
+line-ending = "auto"    # automatically detect the appropriate line ending.
+
+
+
+# [[tool.uv.index]]
+# name = "tuna"
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# default = true   # 设为默认主索引源

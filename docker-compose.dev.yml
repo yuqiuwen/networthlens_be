@@ -1,0 +1,14 @@
+services:
+  api:
+    image: networthlens
+    restart: on-failure:3
+    command: gunicorn -c gunicorn.conf.test.py manage:app
+    env_file: .env.test
+    environment:
+      APP_ENV: testing
+    volumes:
+      - /data/logs/networthlens:/data/logs/networthlens
+      - /data/resource/networthlens:/data/resource/networthlens
+      - /data/db:/data/db
+    ports:
+      - "9005:5555"
