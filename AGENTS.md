@@ -1,7 +1,7 @@
 ## 项目信息
 name：networthlens后端
 description：个人资产管理平台后端，面向个人用户的资产、负债、现金流、投资与目标管理工具，帮助用户“看清净资产、管好现金流、追踪财务目标
-tech-stack：Python FastAPI + PostgreSQL + Redis + Celery
+tech-stack：Python FastAPI + PostgreSQL + Redis + Celery + PydanticAI
 
 
 ## 项目结构
@@ -42,8 +42,6 @@ tech-stack：Python FastAPI + PostgreSQL + Redis + Celery
 │   ├── deploy-docker.test.sh
 │   ├── DEPLOYMENT.md
 │   ├── nginx.conf
-│   ├── nginx.dreamschool-data-prod.conf
-│   └── nginx.dreamschool-data-test.conf
 ├── docker-compose.dev.yml      # 测试compose
 ├── docker-compose.yml          # 生产compose
 ├── docker-entrypoint.sh
@@ -57,7 +55,6 @@ tech-stack：Python FastAPI + PostgreSQL + Redis + Celery
 ├── pyproject.toml
 ├── README.md
 ├── scripts                 # 脚本
-├── start-dev.sh            # 本地启动
 ├── tests
 └── uv.lock
 
