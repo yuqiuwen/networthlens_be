@@ -1,10 +1,12 @@
 import random
+from app.repo.category import category_repo
 from sqlalchemy import func, select
 
 from app.core.exception import APIException
 from app.models._mixin import BaseMixin
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, gen_transaction_id
 from app.schemas.transaction import CreateTransactionSchema, TransactionQuerySchema
+from app.utils.common import gen_ulid
 from app.utils.dater import DT
 from app.utils.paginator import Paginator
 
@@ -14,7 +16,7 @@ class TransactionRepo(BaseMixin[Transaction]):
     流水仓储层
     """
 
-    def build_transaction_uuid(user_id: int, version="1"):
+    def build_transaction_uuid(self, user_id: int, version="1"):
         return f"{DT.now_str('%Y%m%d%H%M%S')}{version}{user_id:-4}{random.randint(0, 99):02d}"
 
     def build_query_cond(
@@ -54,7 +56,6 @@ class TransactionRepo(BaseMixin[Transaction]):
         return cond
 
     async def add(self, session, cur_user, data: CreateTransactionSchema):
-
         transaction_id = data.transaction_id
         if transaction_id:
             exists = await self.exists_external_id(
@@ -69,12 +70,15 @@ class TransactionRepo(BaseMixin[Transaction]):
                     code=400,
                 )
 
+        internal_id = self.build_transaction_uuid(cur_user.id)
+        payload = data.model_dump()
+        payload["transaction_id"] = transaction_id or f"manual:{internal_id}"
         transaction = await self.create(
             session,
             {
-                "id": self.build_transaction_uuid(cur_user.id),
+                "id": internal_id,
                 "user_id": cur_user.id,
-                **data.model_dump(),
+                **payload,
             },
         )
 
@@ -98,7 +102,7 @@ class TransactionRepo(BaseMixin[Transaction]):
 
         stmt = select(self.model).where(*cond).order_by(self.model.occurred_at.desc())
 
-        paged = Paginator(session).paginate(stmt, query.page, query.limit)
+        paged = await Paginator(session).paginate(stmt, query.page, query.limit)
 
         return paged
 
@@ -137,6 +141,38 @@ class TransactionRepo(BaseMixin[Transaction]):
         ret = await self.filter_one(session, *cond)
 
         return ret is not None
+
+    async def list_existing_external_ids(
+        self,
+        session,
+        external_ids: list[str],
+    ) -> set[str]:
+        """Return external transaction IDs that already exist in the database."""
+        if not external_ids:
+            return set()
+
+        stmt = select(self.model.transaction_id).where(self.model.transaction_id.in_(external_ids))
+        ret = await session.execute(stmt)
+        return set(ret.scalars().all())
+
+    async def import_records(self, session, user_id: int, records: list[dict]) -> int:
+        """Insert imported records while ignoring concurrent duplicate transaction IDs."""
+        if not records:
+            return 0
+        
+        data = [
+            {
+                "id": gen_ulid(),
+                "user_id": user_id,
+                **item,
+            } for item in records
+        ]
+        return await self.insert_or_ignore(
+            session,
+            data,
+            index_elements=["channel", "transaction_id"],
+        )
+      
 
     async def soft_delete(
         self,

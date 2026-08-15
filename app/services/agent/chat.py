@@ -335,17 +335,6 @@ class AgentChatService:
                 extra_info={
                     "provider": self.default_model_provider,
                     "model": self.default_model,
-                    "usage": {
-                        "input_tokens": (
-                            final_result.usage.input_tokens
-                        ),
-                        "output_tokens": (
-                            final_result.usage.output_tokens
-                        ),
-                        "requests": (
-                            final_result.usage.requests
-                        ),
-                    },
                 },
             )
 

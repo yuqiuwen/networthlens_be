@@ -1,6 +1,7 @@
 
 TOOL_DISPLAY_NAMES = {
     "expense_analysis": "收支分析",
+    "transaction_rank": "流水金额排名",
     "net_worth_analysis": "净资产分析",
     "asset_analysis": "资产配置分析",
     "liability_analysis": "负债分析",
@@ -11,6 +12,7 @@ TOOL_DISPLAY_NAMES = {
 
 TOOL_RUNNING_MESSAGES = {
     "expense_analysis": "正在分析你的收支情况",
+    "transaction_rank": "正在查询单笔流水金额排名",
     "net_worth_analysis": "正在计算你的净资产",
     "asset_analysis": "正在分析你的资产配置",
     "liability_analysis": "正在分析你的负债情况",

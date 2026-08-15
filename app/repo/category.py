@@ -11,6 +11,7 @@ class CategoryRepo(BaseMixin[Category]):
         user_id: int,
         *,
         category_type=None,
+        ids=None
     ):
         cond = [
             Category.deleted_id == "0", 
@@ -20,6 +21,9 @@ class CategoryRepo(BaseMixin[Category]):
 
         if category_type:
             cond.append(Category.category_type == category_type)
+        if ids:
+            cond.append(Category.id.in_(ids))
+            
         stmt = self.filter(
             *cond
         ).order_by(
@@ -55,6 +59,25 @@ class CategoryRepo(BaseMixin[Category]):
             Category.user_id == user_id,
             Category.category_type == category_type,
             Category.name == name,
+            Category.deleted_id == "0",
+        )
+
+        if exclude_id:
+            stmt = stmt.where(Category.id != exclude_id)
+
+        ret = await session.execute(stmt)
+        return ret.first() is not None
+
+    async def exists_code(
+        self,
+        session,
+        user_id: int,
+        code: str,
+        exclude_id: str | None = None,
+    ):
+        stmt = select(Category.id).where(
+            Category.user_id == user_id,
+            Category.code == code,
             Category.deleted_id == "0",
         )
 

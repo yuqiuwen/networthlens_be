@@ -24,6 +24,9 @@ class CategoryService:
                 errmsg="分类名称已存在",
             )
 
+        if data.code and await category_repo.exists_code(session, cur_user.id, data.code):
+            raise APIException(errmsg="分类标识码已存在")
+
         category = await category_repo.create(
             session,
             {
@@ -80,6 +83,17 @@ class CategoryService:
             if exists:
                 raise APIException(errmsg="分类名称已存在")
 
+        if payload.get("code"):
+            exists = await category_repo.exists_code(
+                session,
+                cur_user.id,
+                payload["code"],
+                exclude_id=category_id,
+            )
+
+            if exists:
+                raise APIException(errmsg="分类标识码已存在")
+
         await category_repo.update(
             session,
             category,
@@ -120,5 +134,4 @@ class CategoryService:
         )
 
         return True
-
 

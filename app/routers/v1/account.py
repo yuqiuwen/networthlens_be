@@ -26,9 +26,10 @@ async def list_account(
     session: SessionDep,
     cur_user: RequireAuthDep,
     account_type: AccountType = Query(None),
-    status: AccountStatus = Query(None)
+    status: AccountStatus = Query(None),
+    name: str | None = Query(None)
 ):
-    ret = await AccountService().list(session, cur_user, account_type, status)
+    ret = await AccountService().list(session, cur_user, account_type, status, name)
     return make_response(data=ret)
 
 

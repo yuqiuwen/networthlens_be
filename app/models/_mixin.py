@@ -1,3 +1,4 @@
+import traceback
 from typing import Any, Generic, List, Dict, Union, Literal, Sequence, Mapping
 import time
 
@@ -168,7 +169,9 @@ class BaseMixin(Generic[Model]):
             else:
                 stmt = stmt.returning(returning)
 
+        
         ret = await session.execute(stmt)
+        
         if returning:
             if isinstance(data, Mapping):
                 ret = ret.first()

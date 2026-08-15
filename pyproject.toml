@@ -16,6 +16,7 @@ dependencies = [
     "jinja2>=3.1.6",
     "msgspec>=0.21.1",
     "pandas>=3.0.3",
+    "openpyxl>=3.1.5",
     "pre-commit>=4.6.0",
     "pydantic-ai>=1.107.0",
     "pydantic-settings>=2.14.1",

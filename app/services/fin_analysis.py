@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
 
 from app.constant import (
     LiabilityStatus,
+    TransactionStatus,
     TransactionType,
 )
 from app.repo.fin_analysis import (
@@ -14,6 +15,7 @@ from app.schemas.fin_analysis import (
     ExpenseAnalysisQuery,
     ExpenseAnalysisResult,
     ExpenseCategoryItem,
+    ExpenseTrendItem,
     FinancialSnapshotResult,
     GoalAnalysisQuery,
     GoalAnalysisResult,
@@ -21,6 +23,9 @@ from app.schemas.fin_analysis import (
     LiabilityAnalysisQuery,
     LiabilityAnalysisResult,
     NetWorthAnalysisResult,
+    TransactionRankItem,
+    TransactionRankQuery,
+    TransactionRankResult,
 )
 
 
@@ -71,19 +76,71 @@ class FinancialAnalysisService:
     # 收支分析
     # ==========================
 
+    async def transaction_rank(
+        self,
+        session,
+        user_id: int,
+        query: TransactionRankQuery,
+    ) -> TransactionRankResult:
+        """Return the highest or lowest individual transactions in a time range."""
+        transaction_type = {
+            "income": TransactionType.INCOME,
+            "expense": TransactionType.EXPENSE,
+        }[query.transaction_type]
+        start_time, end_time = self._resolve_rank_range(query)
+        rows = await fin_analysis_repo.rank_transactions(
+            session,
+            user_id,
+            transaction_type=transaction_type,
+            currency=query.currency,
+            sort_order=query.sort_order,
+            limit=query.limit,
+            start_time=start_time,
+            end_time=end_time,
+            include_refunded=query.include_refunded,
+        )
+
+        return TransactionRankResult(
+            transaction_type=query.transaction_type,
+            sort_order=query.sort_order,
+            currency=query.currency,
+            include_refunded=query.include_refunded,
+            start_time=start_time,
+            end_time=end_time,
+            items=[
+                TransactionRankItem(
+                    rank=index,
+                    category_id=row.category_id,
+                    category_name=row.category_name,
+                    amount=row.amount,
+                    currency=row.currency,
+                    merchant=row.merchant,
+                    product=row.product,
+                    occurred_at=row.occurred_at,
+                    status=TransactionStatus(row.status).desc,
+                )
+                for index, row in enumerate(rows, start=1)
+            ],
+        )
+
     async def expense_analysis(
         self,
         session,
         user_id: int,
         query: ExpenseAnalysisQuery,
     ):
+        start_time, end_time = self._resolve_expense_range(query)
+
         income = (
             await fin_analysis_repo.sum_transaction_amount(
                 session,
                 user_id,
                 transaction_type=TransactionType.INCOME,
-                start_time=query.start_time,
-                end_time=query.end_time,
+                start_time=start_time,
+                end_time=end_time,
+                category_ids=query.category_ids,
+                source_account_ids=query.source_account_ids,
+                target_account_ids=query.target_account_ids,
             )
         )
 
@@ -92,8 +149,11 @@ class FinancialAnalysisService:
                 session,
                 user_id,
                 transaction_type=TransactionType.EXPENSE,
-                start_time=query.start_time,
-                end_time=query.end_time,
+                start_time=start_time,
+                end_time=end_time,
+                category_ids=query.category_ids,
+                source_account_ids=query.source_account_ids,
+                target_account_ids=query.target_account_ids,
             )
         )
 
@@ -101,9 +161,23 @@ class FinancialAnalysisService:
             await fin_analysis_repo.expense_by_category(
                 session,
                 user_id,
-                start_time=query.start_time,
-                end_time=query.end_time,
+                start_time=start_time,
+                end_time=end_time,
+                category_ids=query.category_ids,
+                source_account_ids=query.source_account_ids,
+                target_account_ids=query.target_account_ids,
             )
+        )
+
+        trend_rows = await fin_analysis_repo.sum_transaction_by_period(
+            session,
+            user_id,
+            granularity=query.granularity,
+            start_time=start_time,
+            end_time=end_time,
+            category_ids=query.category_ids,
+            source_account_ids=query.source_account_ids,
+            target_account_ids=query.target_account_ids,
         )
 
         categories = []
@@ -127,7 +201,144 @@ class FinancialAnalysisService:
             expense=expense,
             balance=income - expense,
             top_categories=categories,
+            granularity=query.granularity,
+            trend=self._build_expense_trend(
+                trend_rows,
+                granularity=query.granularity,
+                start_time=start_time,
+                end_time=end_time,
+            ),
         )
+
+    @staticmethod
+    def _resolve_rank_range(
+        query: TransactionRankQuery,
+    ) -> tuple[datetime | None, datetime | None]:
+        """Resolve a relative time range when explicit timestamps are absent."""
+        if query.start_time is not None or query.end_time is not None:
+            return query.start_time, query.end_time
+
+        if query.time_range is None:
+            return None, None
+
+        end_time = datetime.now()
+        if query.time_range == "this_week":
+            start_time = end_time - timedelta(days=end_time.weekday())
+            start_time = start_time.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        elif query.time_range == "this_month":
+            start_time = end_time.replace(
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        else:
+            start_time = end_time.replace(
+                month=1,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+
+        return start_time, end_time
+
+    @staticmethod
+    def _resolve_expense_range(
+        query: ExpenseAnalysisQuery,
+    ) -> tuple[datetime | None, datetime | None]:
+        """Resolve an optional number of recent calendar periods into a time range."""
+        start_time = query.start_time
+        end_time = query.end_time
+
+        if query.period_count:
+            end_time = end_time or datetime.now()
+            if start_time is None:
+                end_bucket = FinancialAnalysisService._period_start(
+                    end_time,
+                    query.granularity,
+                )
+                start_time = FinancialAnalysisService._shift_period(
+                    end_bucket,
+                    query.granularity,
+                    -(query.period_count - 1),
+                )
+
+        return start_time, end_time
+
+    @staticmethod
+    def _period_start(value: datetime, granularity: str) -> datetime:
+        """Return the beginning of the calendar bucket containing a timestamp."""
+        value = value.replace(hour=0, minute=0, second=0, microsecond=0)
+        if granularity == "week":
+            return value - timedelta(days=value.weekday())
+        if granularity == "month":
+            return value.replace(day=1)
+        return value.replace(month=1, day=1)
+
+    @staticmethod
+    def _shift_period(value: datetime, granularity: str, count: int) -> datetime:
+        """Shift a bucket start by a number of calendar periods."""
+        if granularity == "week":
+            return value + timedelta(weeks=count)
+        if granularity == "month":
+            month_index = value.year * 12 + value.month - 1 + count
+            year, month_index = divmod(month_index, 12)
+            return value.replace(year=year, month=month_index + 1, day=1)
+        return value.replace(year=value.year + count, month=1, day=1)
+
+    @classmethod
+    def _build_expense_trend(
+        cls,
+        rows,
+        *,
+        granularity: str,
+        start_time: datetime | None,
+        end_time: datetime | None,
+    ) -> list[ExpenseTrendItem]:
+        """Build ordered trend items and fill missing buckets within a bounded range."""
+        values = {}
+        for row in rows:
+            period = row.period
+            if not isinstance(period, datetime):
+                period = datetime.combine(period, time.min)
+            label = cls._period_label(period, granularity)
+            income = int(row.income or 0)
+            expense = int(row.expense or 0)
+            values[label] = (income, expense)
+
+        if start_time is not None and end_time is not None and start_time <= end_time:
+            period = cls._period_start(start_time, granularity)
+            end_period = cls._period_start(end_time, granularity)
+            while period <= end_period:
+                label = cls._period_label(period, granularity)
+                values.setdefault(label, (0, 0))
+                period = cls._shift_period(period, granularity, 1)
+
+        return [
+            ExpenseTrendItem(
+                period=label,
+                income=income,
+                expense=expense,
+                balance=income - expense,
+            )
+            for label, (income, expense) in sorted(values.items())
+        ]
+
+    @staticmethod
+    def _period_label(value: datetime, granularity: str) -> str:
+        if granularity == "week":
+            return value.strftime("%G-W%V")
+        if granularity == "month":
+            return value.strftime("%Y-%m")
+        return value.strftime("%Y")
 
     # ==========================
     # 资产分析

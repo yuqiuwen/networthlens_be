@@ -34,6 +34,7 @@ class Account(BaseModel, TimeModel):
     balance = Column(BigInteger, nullable=False, server_default=text("0"))
     available_balance = Column(BigInteger, nullable=False, server_default=text("0"))
     credit_limit = Column(BigInteger)
+    icon = Column(Text)
     status = Column(SmallInteger, nullable=False, index=True, default=AccountStatus.NORMAL)
     sort_no = Column(Integer, nullable=False, server_default=text("0"))
     note = Column(String(500))
@@ -55,6 +56,7 @@ class Category(BaseModel, TimeModel):
 
     id = Column(String(26), primary_key=True)
     user_id = Column(BigInteger)
+    code = Column(String(50))
     category_type = Column(SmallInteger, nullable=False)
     parent_id = Column(String(26), nullable=True, index=True)
     name = Column(String(50), nullable=False)
@@ -64,7 +66,10 @@ class Category(BaseModel, TimeModel):
     status = Column(SmallInteger, nullable=False, server_default=text("1"))
     deleted_id = Column(String(26), nullable=False, default="0")
 
-    __table_args__ = (Index(None, "user_id", "category_type"),)
+    __table_args__ = (
+        Index(None, "user_id", "category_type"),
+        UniqueConstraint("user_id", "code", name=None)
+    )
 
 
 

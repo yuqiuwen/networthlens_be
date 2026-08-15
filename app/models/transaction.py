@@ -1,5 +1,12 @@
-from app.constant import TransactionStatus
+import random
+from app.constant import TransactionChannel, TransactionStatus
 from app.models.module import *
+from app.utils.dater import DT
+
+
+def gen_transaction_id(user_id: int, version=1):
+    now = DT.now_time()
+    return f"{now.strftime("%Y%m%d%H%M%S%f")[:-3]}{version}{str(user_id)[-4:].zfill(4)}{random.randint(0, 9999):04d}"
 
 
 class Transaction(BaseModel, TimeModel):
@@ -7,9 +14,10 @@ class Transaction(BaseModel, TimeModel):
     交易流水表
 
     字段说明：
-    - id: {year}{mon}{day}{time}{version}{user_id}{random}, {年月日8位}{时间6位}{版本号1位}{用户id后4位}{随机序列号2位}
+    - id: {year}{mon}{day}{time}{version}{user_id}{random}, {年月日8位}{时间9位}{版本号1位}{用户id后4位}{随机序列号4位}
     - transaction_type: TransactionType
     - status: TransactionStatus
+    - channel: TransactionChannel
     - merchant: 商户
     - account_id
     - source_account_id: 支出/转出账户
@@ -19,10 +27,11 @@ class Transaction(BaseModel, TimeModel):
 
     __tablename__ = "transaction"
 
-    id = Column(String(21), primary_key=True)
+    id = Column(String(26), primary_key=True)
     user_id = Column(BigInteger, nullable=False)
+    channel = Column(SmallInteger, nullable=False, default=TransactionChannel.OTHER)
     transaction_type = Column(SmallInteger, nullable=False)
-    transaction_id = Column(String(100), nullable=False, unique=True)
+    transaction_id = Column(String(100), nullable=False)
     category_id = Column(String(26))
     source_account_id = Column(String(26), index=True)
     target_account_id = Column(String(26), index=True)
@@ -38,6 +47,7 @@ class Transaction(BaseModel, TimeModel):
     __table_args__ = (
         Index(None, "user_id", "occurred_at"),
         Index(None, "user_id", "transaction_type"),
+        UniqueConstraint("channel", "transaction_id", name=None)
     )
 
 

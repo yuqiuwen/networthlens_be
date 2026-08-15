@@ -1,3 +1,4 @@
+from app.ext.jwt import TokenUserInfo
 from fastapi import HTTPException
 
 from app.constant import AccountStatus
@@ -38,15 +39,17 @@ class AccountService:
     async def list(
         self,
         session,
-        cur_user: User,
+        cur_user: TokenUserInfo,
         account_type=None,
         status=None,
+        name=None
     ):
         return await account_repo.list(
             session,
             cur_user.id,
             account_type=account_type,
             status=status,
+            name=name
         )
 
     async def detail(

@@ -163,7 +163,7 @@ class DevelopmentConfig(Settings):
         env_file=".env", env_ignore_empty=True, env_file_encoding="utf-8"
     )
 
-    SQLALCHEMY_ECHO: bool = True
+    SQLALCHEMY_ECHO: bool = False
     DEBUG: bool = True
     LOG_LEVEL: int = logging.DEBUG
     ENABLE_REQ_LOG: bool = False

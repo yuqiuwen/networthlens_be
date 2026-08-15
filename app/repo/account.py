@@ -1,10 +1,29 @@
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models._mixin import BaseMixin
 from app.models.asset import Account
 
 
 class AccountRepo(BaseMixin[Account]):
+    async def list_by_names(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        names: set[str],
+    ) -> list[Account]:
+        """List active accounts whose names exactly match the supplied names."""
+        if not names:
+            return []
+
+        stmt = select(Account).where(
+            Account.user_id == user_id,
+            Account.deleted_id == "0",
+            Account.name.in_(names),
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
     async def list(
         self,
         session,
@@ -12,6 +31,7 @@ class AccountRepo(BaseMixin[Account]):
         *,
         account_type=None,
         status=None,
+        name=None
     ):
         stmt = (
             select(Account)
@@ -22,11 +42,15 @@ class AccountRepo(BaseMixin[Account]):
             .order_by(Account.sort_no.asc(), Account.ctime.desc())
         )
 
+        cond = []
         if account_type:
-            stmt = stmt.where(Account.account_type == account_type)
+            cond.append(Account.account_type == account_type)
 
         if status:
-            stmt = stmt.where(Account.status == status)
+            cond.append(Account.status == status)
+
+        if name is not None:
+            cond.append(Account.name.ilike(f"%{name}%"))
 
         ret = await session.execute(stmt)
         return ret.scalars().all()
@@ -83,5 +107,3 @@ class AccountRepo(BaseMixin[Account]):
 
 
 account_repo = AccountRepo(Account)
-
-

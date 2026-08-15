@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import List
+from typing import List, Literal
 
-from sqlalchemy import func
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from app.constant import (
     LiabilityStatus,
+    TransactionStatus,
     TransactionType,
 )
 from app.models.asset import (
@@ -105,6 +105,9 @@ class FinancialAnalysisRepo:
         transaction_type: int,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        category_ids: list[str] | None = None,
+        source_account_ids: list[str] | None = None,
+        target_account_ids: list[str] | None = None,
     ):
         cond = [
             Transaction.user_id == user_id,
@@ -122,6 +125,15 @@ class FinancialAnalysisRepo:
             cond.append(
                 Transaction.occurred_at <= end_time
             )
+
+        if category_ids:
+            cond.append(Transaction.category_id.in_(category_ids))
+
+        if source_account_ids:
+            cond.append(Transaction.source_account_id.in_(source_account_ids))
+
+        if target_account_ids:
+            cond.append(Transaction.target_account_id.in_(target_account_ids))
 
         stmt = select(
             func.coalesce(
@@ -141,6 +153,9 @@ class FinancialAnalysisRepo:
         *,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
+        category_ids: list[str] | None = None,
+        source_account_ids: list[str] | None = None,
+        target_account_ids: list[str] | None = None,
     ):
         cond = [
             Transaction.user_id == user_id,
@@ -158,6 +173,15 @@ class FinancialAnalysisRepo:
             cond.append(
                 Transaction.occurred_at <= end_time
             )
+
+        if category_ids:
+            cond.append(Transaction.category_id.in_(category_ids))
+
+        if source_account_ids:
+            cond.append(Transaction.source_account_id.in_(source_account_ids))
+
+        if target_account_ids:
+            cond.append(Transaction.target_account_id.in_(target_account_ids))
 
         stmt = (
             select(
@@ -187,6 +211,143 @@ class FinancialAnalysisRepo:
         ret = await session.execute(stmt)
 
         return ret.all()
+
+    async def sum_transaction_by_period(
+        self,
+        session,
+        user_id: int,
+        *,
+        granularity: Literal["week", "month", "year"],
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        category_ids: list[str] | None = None,
+        source_account_ids: list[str] | None = None,
+        target_account_ids: list[str] | None = None,
+    ) -> list:
+        """Aggregate income and expense by a calendar week, month, or year."""
+        if granularity not in {"week", "month", "year"}:
+            raise ValueError("不支持的收支统计粒度")
+
+        cond = [
+            Transaction.user_id == user_id,
+            Transaction.deleted_id == "0",
+            Transaction.transaction_type.in_(
+                [TransactionType.INCOME, TransactionType.EXPENSE]
+            ),
+        ]
+
+        if start_time:
+            cond.append(Transaction.occurred_at >= start_time)
+
+        if end_time:
+            cond.append(Transaction.occurred_at <= end_time)
+
+        if category_ids:
+            cond.append(Transaction.category_id.in_(category_ids))
+
+        if source_account_ids:
+            cond.append(Transaction.source_account_id.in_(source_account_ids))
+
+        if target_account_ids:
+            cond.append(Transaction.target_account_id.in_(target_account_ids))
+
+        period = func.date_trunc(granularity, Transaction.occurred_at).label("period")
+        income = func.coalesce(
+            func.sum(
+                case(
+                    (
+                        Transaction.transaction_type == TransactionType.INCOME,
+                        Transaction.amount,
+                    ),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("income")
+        expense = func.coalesce(
+            func.sum(
+                case(
+                    (
+                        Transaction.transaction_type == TransactionType.EXPENSE,
+                        Transaction.amount,
+                    ),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("expense")
+
+        stmt = (
+            select(period, income, expense)
+            .where(*cond)
+            .group_by(period)
+            .order_by(period.asc())
+        )
+
+        result = await session.execute(stmt)
+        return result.all()
+
+    async def rank_transactions(
+        self,
+        session,
+        user_id: int,
+        *,
+        transaction_type: TransactionType,
+        currency: str,
+        sort_order: Literal["asc", "desc"],
+        limit: int,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        include_refunded: bool = False,
+    ) -> list:
+        """Return a bounded amount ranking of a user's transactions."""
+        if sort_order not in {"asc", "desc"}:
+            raise ValueError("不支持的流水排序方向")
+
+        cond = [
+            Transaction.user_id == user_id,
+            Transaction.deleted_id == "0",
+            Transaction.transaction_type == transaction_type,
+            Transaction.currency == currency,
+        ]
+
+        if not include_refunded:
+            cond.append(Transaction.status == TransactionStatus.NORMAL)
+
+        if start_time:
+            cond.append(Transaction.occurred_at >= start_time)
+
+        if end_time:
+            cond.append(Transaction.occurred_at <= end_time)
+
+        amount_order = (
+            Transaction.amount.asc()
+            if sort_order == "asc"
+            else Transaction.amount.desc()
+        )
+        stmt = (
+            select(
+                Transaction.category_id,
+                Category.name.label("category_name"),
+                Transaction.amount,
+                Transaction.currency,
+                Transaction.merchant,
+                Transaction.product,
+                Transaction.occurred_at,
+                Transaction.status,
+            )
+            .outerjoin(Category, Category.id == Transaction.category_id)
+            .where(*cond)
+            .order_by(
+                amount_order,
+                Transaction.occurred_at.desc(),
+                Transaction.id.asc(),
+            )
+            .limit(limit)
+        )
+
+        result = await session.execute(stmt)
+        return result.all()
 
     # ==========================
     # Asset

@@ -1,7 +1,14 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, field_serializer, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
+
+
+AnalysisGranularity = Literal["week", "month", "year"]
+TransactionRankType = Literal["income", "expense"]
+TransactionRankOrder = Literal["asc", "desc"]
+TransactionRankTimeRange = Literal["this_week", "this_month", "this_year"]
 
 
 # =====================
@@ -26,6 +33,22 @@ class ExpenseAnalysisQuery(BaseAnalysisQuery):
     category_ids: list[str] | None = None
     source_account_ids: list[str] | None = None
     target_account_ids: list[str] | None = None
+    granularity: AnalysisGranularity = "month"
+    period_count: int | None = Field(default=None, ge=1, le=120)
+
+
+class TransactionRankQuery(BaseAnalysisQuery):
+    transaction_type: TransactionRankType = "expense"
+    sort_order: TransactionRankOrder = "desc"
+    limit: int = Field(default=10, ge=1, le=100)
+    currency: str = Field(default="CNY", min_length=3, max_length=3)
+    time_range: TransactionRankTimeRange | None = None
+    include_refunded: bool = False
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.strip().upper()
 
 
 class AssetAnalysisQuery(BaseAnalysisQuery):
@@ -66,15 +89,54 @@ class ExpenseCategoryItem(BaseModel):
         return Decimal(value) / Decimal("100")
 
 
+class ExpenseTrendItem(BaseModel):
+    period: str
+    income: int
+    expense: int
+    balance: int
+
+    @field_serializer("income", "expense", "balance")
+    def serialize_amount(self, value: int) -> Decimal:
+        return Decimal(value) / Decimal("100")
+
+
 class ExpenseAnalysisResult(BaseModel):
     income: int
     expense: int
     balance: int
     top_categories: list[ExpenseCategoryItem]
+    granularity: AnalysisGranularity = "month"
+    trend: list[ExpenseTrendItem] = Field(default_factory=list)
 
     @field_serializer("income", "expense", "balance")
     def serialize_amount(self, value: int) -> Decimal:
         return Decimal(value) / Decimal("100")
+
+
+class TransactionRankItem(BaseModel):
+    rank: int
+    category_id: str | None
+    category_name: str | None
+    amount: int
+    currency: str
+    merchant: str | None
+    product: str | None
+    occurred_at: datetime
+    status: str
+
+    @field_serializer("amount")
+    def serialize_amount(self, value: int) -> Decimal:
+        return Decimal(value) / Decimal("100")
+
+
+class TransactionRankResult(BaseModel):
+    transaction_type: TransactionRankType
+    sort_order: TransactionRankOrder
+    currency: str
+    include_refunded: bool = False
+    start_time: datetime | None
+    end_time: datetime | None
+    items: list[TransactionRankItem]
 
 
 class AssetAllocationItem(BaseModel):

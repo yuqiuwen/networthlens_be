@@ -20,6 +20,7 @@ financial_agent = Agent(
     model_settings=ModelSettings(timeout=300),
     tools=[
         fin_analysis.expense_analysis,
+        fin_analysis.transaction_rank,
         fin_analysis.net_worth_analysis,
         fin_analysis.asset_analysis,
         fin_analysis.liability_analysis,

@@ -236,6 +236,7 @@ class TransactionType(IntEnumPro):
 class TransactionStatus(IntEnumPro):
     NORMAL = 1, "正常"
     REVOKED = 2, "撤销"
+    REFUNDED = 3, "已退款"
 
 
 class AssetType(IntEnumPro):
@@ -424,3 +425,14 @@ class IntervalUnit(IntEnumPro):
     MONTH = 3, "月"
     YEAR = 4, "年"
 
+
+class TransactionChannel(IntEnumPro):
+    WX = 1, "微信"
+    ALIPAY = 2, "支付宝"
+    ZS_BANK = 3, "网银"
+    CASH = 4, "现金"
+    OTHER = 0, "其他"
+
+
+class UserSecretCode(EnumPro):
+    DEFAULT = "default", "通用"
