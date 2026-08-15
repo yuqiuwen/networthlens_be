@@ -85,7 +85,7 @@ tech-stack：Python FastAPI + PostgreSQL + Redis + Celery + PydanticAI
 
 ## 错误处理
 
-- 业务异常使用自定义 Exception 类，`errmsg` 将作为前端显示文本
+- 业务异常使用自定义 Exception 类，`errmsg` 将作为前端显示文本，服务层抛出异常时必须写明errmsg
 - 不要使用 bare except
 
 

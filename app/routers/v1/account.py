@@ -4,7 +4,14 @@ from app.constant import AccountStatus, AccountType
 from app.core.dependencies import RequireAuthDep, SessionDep
 from app.core.http_handler import RespModel, make_response
 from app.routers import BaseAPIRouter
-from app.schemas.account import AccountDetailSchema, AccountListSchema, CreateAccountSchema, UpdateAccountSchema
+from app.schemas.account import (
+    AccountBalanceQuerySchema,
+    AccountBalanceSchema,
+    AccountDetailSchema,
+    AccountListSchema,
+    CreateAccountSchema,
+    UpdateAccountSchema,
+)
 from app.services.account import AccountService
 
 
@@ -30,6 +37,20 @@ async def list_account(
     name: str | None = Query(None)
 ):
     ret = await AccountService().list(session, cur_user, account_type, status, name)
+    return make_response(data=ret)
+
+
+@router.post(
+    "/balance",
+    summary="查询账户余额",
+    response_model=RespModel[list[AccountBalanceSchema]],
+)
+async def query_account_balances(
+    session: SessionDep,
+    cur_user: RequireAuthDep,
+    data: AccountBalanceQuerySchema,
+):
+    ret = await AccountService().balances(session, cur_user, data)
     return make_response(data=ret)
 
 

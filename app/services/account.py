@@ -5,7 +5,8 @@ from app.constant import AccountStatus
 from app.core.exception import APIException
 from app.models.user import User
 from app.repo.account import account_repo
-from app.schemas.account import CreateAccountSchema
+from app.schemas.account import AccountBalanceQuerySchema, CreateAccountSchema
+from app.services.secret import SecretService
 from app.utils.common import gen_ulid
 
 
@@ -66,6 +67,20 @@ class AccountService:
 
         return account
 
+    async def balances(
+        self,
+        session,
+        cur_user: TokenUserInfo,
+        data: AccountBalanceQuerySchema,
+    ):
+        await SecretService.verify_default(session, cur_user, data.code)
+
+        if data.account_id:
+            account = await account_repo.retrieve(session, data.account_id, cur_user.id)
+            return [account]
+
+        return await account_repo.list(session, cur_user.id)
+
     async def update(
         self,
         session,
@@ -122,4 +137,3 @@ class AccountService:
         )
 
         return True
-

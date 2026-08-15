@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 
 from app.constant import AccountStatus, AccountType
 from app.schemas.common import EntityModel
+from app.schemas.sys import EncryptedSecretCodeSchema
 
 
 
@@ -27,15 +28,24 @@ class AccountListSchema(EntityModel):
     account_type: AccountType
     name: str
     currency: str
-    balance: int
     status: AccountStatus
     note: str | None
     icon: str | None
 
 
-
 class AccountDetailSchema(EntityModel):
-    available_balance: int
     credit_limit: int | None = None
     note: str | None = None
-    icon: str | None
+    icon: str | None = None
+
+
+class AccountBalanceQuerySchema(EncryptedSecretCodeSchema):
+    account_id: str | None = None
+
+
+class AccountBalanceSchema(EntityModel):
+    id: str
+    currency: str
+    balance: int
+    available_balance: int
+    credit_limit: int | None = None
