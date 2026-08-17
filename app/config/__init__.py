@@ -48,6 +48,7 @@ class Settings(BaseSettings):
         "/docs",
         "/redoc",
         "/openapi.json",
+        "/v1/auth/refresh",
     }
 
     # 白名单路由正则

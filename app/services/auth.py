@@ -162,7 +162,7 @@ class AuthService:
 
     @staticmethod
     async def refresh_token(
-        db, response, request: Request, cur_user: TokenUserInfo
+        db, response, request: Request
     ) -> RespLoginSchema:
         """
         刷新令牌
@@ -172,8 +172,18 @@ class AuthService:
         :return:
         """
 
-        refresh_token = await jwt_manager.get_refresh_token(request, verify=False)
-        user = await UserService.check_user_exist(db, "id", cur_user.id)
+        refresh_token = await jwt_manager.get_refresh_token(request)
+        token_obj = jwt_manager.verify_token(refresh_token)
+
+        # 必须明确检查 token 类型
+        if token_obj.flg != jwt_manager.config.RF_TOKEN_KEY:
+            raise AuthException(
+                code=AppCode.AUTH_INVALID,
+                message="Invalid refresh token",
+                errmsg="刷新凭证无效",
+            )
+
+        user = await UserService.check_user_exist(db, "id", token_obj.user_id,)
         if not user:
             raise AuthException(code=AppCode.ACCOUNT_NOT_EXIST, errmsg="用户不存在")
 
@@ -181,10 +191,7 @@ class AuthService:
         new_access_token, new_refresh_token = await jwt_manager.refresh_access_token(
             refresh_token, True, userinfo
         )
-        data = {
-            "access_token": new_access_token.token,
-            "expire_in": DT.time2ts(new_access_token.expire_in),
-        }
+   
         response.set_cookie(
             key=settings.COOKIE_REFRESH_TOKEN_KEY,
             value=new_refresh_token.token,
@@ -192,8 +199,12 @@ class AuthService:
             expires=new_refresh_token.expire_in,
             httponly=True,
             secure=True,
+            samesite="lax",
         )
-        return data
+        return RespLoginSchema(
+            access_token=new_access_token.token,
+            expire_in=DT.time2ts(new_access_token.expire_in),
+        )
 
     @classmethod
     async def login_by_account(cls, session, account: str, code: str):

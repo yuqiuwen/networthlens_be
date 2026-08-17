@@ -32,6 +32,7 @@ dependencies = [
     "sqlalchemy>=2.0.50",
     "typer>=0.26.7",
     "uvicorn>=0.48.0",
+    "mkdocs>=1.6.1",
 ]
 
 

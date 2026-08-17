@@ -1,3 +1,4 @@
+from app.core.loggers import app_logger
 from fastapi.requests import HTTPConnection
 from fastapi.security.utils import get_authorization_scheme_param
 from starlette.authentication import AuthCredentials, AuthenticationBackend, AuthenticationError
@@ -48,7 +49,7 @@ class JwtAuthMiddleware(AuthenticationBackend):
         return make_json_response(exc.msg, code=exc.code, errmsg=exc.errmsg)
 
     @staticmethod
-    async def jwt_authentication(token: str, request) -> TokenUserInfo:
+    async def jwt_authentication(token: str) -> TokenUserInfo:
         """
         JWT 认证
 
@@ -56,25 +57,34 @@ class JwtAuthMiddleware(AuthenticationBackend):
         :return:
         """
         try:
-            token_payload = jwt_manager.verify_token(
-                token, verify_exp=request.url.path != "/v1/auth/refresh"
-            )
-            user_id = token_payload.user_id
-            userinfo = await jwt_manager.load_from_cache(
-                user_id, token_payload.jti, token_payload.flg
-            )
-            if not userinfo:
+            token_payload = jwt_manager.verify_token(token)
+            if token_payload.flg != jwt_manager.config.AC_TOKEN_KEY:
                 raise _AuthenticationError(
-                    code=AppCode.AUTH_INVALID, msg="token expired", errmsg="登录状态已过期"
+                    code=AppCode.AUTH_INVALID,
+                    msg="invalid token type",
+                    errmsg="身份凭证无效",
                 )
-            return userinfo
-        except AuthException as e:
-            # 将业务层的 AuthException 转换为 middleware 层的 _AuthenticationError
-            raise _AuthenticationError(code=e.code, msg=e.message, errmsg=e.errmsg)
-        except Exception:
-            raise _AuthenticationError(
-                code=AppCode.INTERNAL_ERROR, msg="server error!", errmsg="系统异常"
+            return await jwt_manager.load_from_cache(
+                token_payload.user_id,
+                token_payload.jti,
+                token_payload.flg,
             )
+        except _AuthenticationError:
+            raise
+        except AuthException as e:
+            raise _AuthenticationError(
+                code=e.code,
+                msg=e.message,
+                errmsg=e.errmsg,
+            ) from e
+        except Exception as e:
+            app_logger.error(str(e))
+            raise _AuthenticationError(
+                code=AppCode.INTERNAL_ERROR,
+                msg="server error!",
+                errmsg="系统异常",
+            ) from e
+
 
     async def authenticate(self, request: Request) -> tuple[AuthCredentials, TokenUserInfo] | None:
         """
@@ -84,23 +94,26 @@ class JwtAuthMiddleware(AuthenticationBackend):
         :return:
         """
 
-        token = request.headers.get("Authorization")
         path = request.url.path
 
-        if not token:
-            return
-
+        # 白名单
         if path in settings.WHITE_ROUTE_LIST:
-            return
+            return None
+
         for pattern in settings.WHITE_ROUTE_PATTERN:
             if pattern.match(path):
-                return
+                return None
 
-        scheme, token = get_authorization_scheme_param(token)
+        authorization = request.headers.get("Authorization")
+        if not authorization:
+            return None
+
+        scheme, token = get_authorization_scheme_param(authorization)
+
         if scheme.lower() != "bearer":
-            return
+            return None
 
-        user = await self.jwt_authentication(token, request)
+        user = await self.jwt_authentication(token)
 
         return AuthCredentials(["authenticated"]), user
 
@@ -126,6 +139,6 @@ class JwtAuthMiddleware(AuthenticationBackend):
     #     if scheme.lower() != "bearer":
     #         raise _AuthenticationError(msg="invalid token scheme", errmsg="token scheme invalid")
 
-    #     user = await self.jwt_authentication(token, request)
+    #     user = await self.jwt_authentication(token)
 
     #     return AuthCredentials(["authenticated"]), user

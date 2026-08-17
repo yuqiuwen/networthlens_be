@@ -148,6 +148,16 @@ class JWTManager:
             if not sub or not jti or not exp:
                 raise AuthException("Invalid token", errmsg="token无效")
 
+            if flg not in (
+                self.config.AC_TOKEN_KEY,
+                self.config.RF_TOKEN_KEY,
+            ):
+                raise AuthException(
+                    "Invalid token type",
+                    code=AppCode.AUTH_INVALID,
+                    errmsg="token无效",
+                )
+
             return TokenData(
                 user_id=int(sub),
                 jti=jti,
@@ -155,12 +165,19 @@ class JWTManager:
                 flg=flg,
             )
 
-        except ExpiredSignatureError:
-            raise AuthException("Token expired", code=AppCode.AUTH_INVALID, errmsg="登录状态已过期")
-        except JWTError:
-            raise AuthException("Invalid token", errmsg="认证失败")
-        except Exception:
-            raise AuthException("Invalid token", errmsg="认证失败")
+        except AuthException:
+            raise
+        except ExpiredSignatureError as e:
+            raise AuthException("Token expired", code=AppCode.AUTH_INVALID, errmsg="登录状态已过期") from e
+        except JWTError as e:
+            raise AuthException("Invalid token", errmsg="认证失败") from e
+        except (ValueError, TypeError, OverflowError) as e:
+            raise AuthException(
+                "Invalid token",
+                code=AppCode.AUTH_INVALID,
+                errmsg="认证失败",
+            ) from e
+
 
     async def load_from_cache(
         self, user_id: int, jti: str, flg: Literal["access", "refresh"]
@@ -176,15 +193,20 @@ class JWTManager:
     ) -> tuple[AccessToken, RefreshToken]:
         """使用刷新令牌获取新的访问令牌"""
         token_obj = self.verify_token(refresh_token)
-        if not token_obj or token_obj.flg != self.config.RF_TOKEN_KEY:
-            raise AuthException("Invalid token", code=AppCode.AUTH_INVALID, errmsg="token无效")
+        if token_obj.flg != self.config.RF_TOKEN_KEY:
+            raise AuthException(
+                "Invalid token",
+                code=AppCode.AUTH_INVALID,
+                errmsg="token无效",
+            )
 
         token_cache = JWTTokenCache(self.config.RF_TOKEN_KEY, token_obj.user_id, token_obj.jti)
-        user_id = await token_cache.get()
+
+        # 原子读取 + 删除，一枚 refresh token 只能消费一次
+        user_id = await token_cache.getdel()
         if not user_id or int(user_id) != token_obj.user_id:
             raise AuthException("Invalid token", code=AppCode.AUTH_INVALID, errmsg="token无效")
 
-        await token_cache.delete()
         await JWTTokenCache(self.config.AC_TOKEN_KEY, token_obj.user_id, token_obj.jti).delete()
 
         access_token: AccessToken = await self.create_access_token(user_id, multi_login, userinfo)

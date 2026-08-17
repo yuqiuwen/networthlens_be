@@ -55,6 +55,9 @@ class JWTTokenCache(BaseCache):
     async def get(self):
         return await pms_cache.get(self.key)
 
+    async def getdel(self):
+        return await pms_cache.getdel(self.key)
+
     async def add(self, data: str, expire):
         # data: sub
         ret = await pms_cache.set(self.key, data, ex=expire)

@@ -67,10 +67,10 @@ async def set_password(data: SetPwdSchema, session: SessionDep, cur_uid: CurUidD
 
 @router.post("/refresh", summary="刷新 token", response_model=RespModel[RespLoginSchema])
 async def refresh_token(
-    session: SessionDep, response: Response, request: Request, cur_user: RequireAuthDep
+    session: SessionDep, response: Response, request: Request
 ):
     data = await AuthService.refresh_token(
-        db=session, response=response, request=request, cur_user=cur_user
+        db=session, response=response, request=request
     )
 
     return make_response(data=data)
