@@ -1,4 +1,5 @@
 import random
+from typing import List
 from app.repo.category import category_repo
 from sqlalchemy import func, select
 
@@ -24,9 +25,9 @@ class TransactionRepo(BaseMixin[Transaction]):
         user_id: int,
         *,
         transaction_type=None,
-        category_id=None,
+        category_id: List[str] =None,
         source_account_id=None,
-        target_account_id=None,
+        target_account_id: List[str]=None,
         start_time,
         end_time,
     ):
@@ -39,13 +40,19 @@ class TransactionRepo(BaseMixin[Transaction]):
             cond.append(self.model.transaction_type == transaction_type)
 
         if category_id:
-            cond.append(self.model.category_id == category_id)
+            if len(category_id) == 1:
+                cond.append(self.model.category_id == category_id[0])
+            else:
+                cond.append(self.model.category_id.in_(category_id))
 
         if source_account_id:
             cond.append(self.model.source_account_id == source_account_id)
 
         if target_account_id:
-            cond.append(self.model.target_account_id == target_account_id)
+            if len(target_account_id) == 1:
+                cond.append(self.model.target_account_id == target_account_id[0])
+            else:
+                cond.append(self.model.target_account_id.in_(target_account_id))
 
         if start_time:
             cond.append(self.model.occurred_at >= start_time)
@@ -90,12 +97,18 @@ class TransactionRepo(BaseMixin[Transaction]):
         user_id: int,
         query: TransactionQuerySchema,
     ):
+        category_id = target_account_id = None
+        if query.category_id:
+            category_id = [str(x.strip()) for x in query.category_id.split(",")]
+        if query.target_account_id:
+            target_account_id = [str(x.strip()) for x in query.target_account_id.split(",")]
+
         cond = self.build_query_cond(
             user_id,
             transaction_type=query.transaction_type,
-            category_id=query.category_id,
+            category_id=category_id,
             source_account_id=query.source_account_id,
-            target_account_id=query.target_account_id,
+            target_account_id=target_account_id,
             start_time=query.start_time,
             end_time=query.end_time,
         )
@@ -167,7 +180,7 @@ class TransactionRepo(BaseMixin[Transaction]):
                 **item,
             } for item in records
         ]
-        return await self.insert_or_ignore(
+        return await self.insert_do_update(
             session,
             data,
             index_elements=["channel", "transaction_id"],
@@ -202,6 +215,8 @@ class TransactionRepo(BaseMixin[Transaction]):
         transaction_type=None,
         start_time=None,
         end_time=None,
+        category_id: list[str] =None,
+        target_account_id: list[str]=None,
     ):
         cond = [
             self.model.user_id == user_id,
@@ -216,6 +231,18 @@ class TransactionRepo(BaseMixin[Transaction]):
 
         if end_time:
             cond.append(self.model.occurred_at <= end_time)
+
+        if category_id:
+            if len(category_id) == 1:
+                cond.append(self.model.category_id == category_id[0])
+            else:
+                cond.append(self.model.category_id.in_(category_id))
+        
+        if target_account_id:
+            if len(target_account_id) > 1:
+                cond.append(self.model.target_account_id.in_(target_account_id))
+            else:
+                cond.append(self.model.target_account_id == target_account_id[0])
 
         stmt = select(
             func.coalesce(

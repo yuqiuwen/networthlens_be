@@ -2,6 +2,7 @@ import traceback
 
 from pydantic_ai import AgentRunResultEvent, FinalResultEvent, FunctionToolCallEvent, FunctionToolResultEvent, PartStartEvent, TextPart
 from pydantic_ai.messages import PartDeltaEvent, TextPartDelta, ThinkingPartDelta
+from pydantic_ai.usage import UsageLimits
 from app.agent.constant import ChatEventType
 from app.agent.context_builder import ContextBuilder
 from app.agent.deps import FinAgentDeps
@@ -197,12 +198,14 @@ class AgentChatService:
 
             deps = await self._build_deps(session)
 
-            chunks = []
-
             async with financial_agent.run_stream_events(
                 message,
                 deps=deps,
                 message_history=message_history,
+                usage_limits=UsageLimits(
+                    request_limit=10,
+                    tool_calls_limit=10,
+                ),
             ) as events:
                 async for event in events:
 
@@ -296,12 +299,12 @@ class AgentChatService:
                     # -------------------------
                     if isinstance(event, AgentRunResultEvent):
                         final_result = event.result
-                        yield {
-                            "type": ChatEventType.FINISH,
-                            "data": {
-                                "session_id": session_id,
-                            },
-                        }
+                        # yield {
+                        #     "type": ChatEventType.FINISH,
+                        #     "data": {
+                        #         "session_id": session_id,
+                        #     },
+                        # }
 
                         continue
 

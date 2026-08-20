@@ -10,9 +10,26 @@ from app.services.bill_parser.base import BillRecord, yuan_to_cent
 
 
 DIRECTION_MAP = {"支出": TransactionType.EXPENSE, "收入": TransactionType.INCOME}
-CATEGORY_REG_MATCH_MAP = {
-    "expense_shopping": r'(京东|淘宝|天猫|拼多多|唯品会)',
-    "expense_traffic": r'(中铁网络|高德打车|携程|同程旅行|滴滴)',
+
+# 根据 “交易对方“ 判断分类
+TRANSACTION_TARGET_CATEGORY_REG_EXPENSE_MAP = {
+    "expense-shopping": r'(京东|淘宝|天猫|拼多多|唯品会|JD|超市|美宜佳|盒马|永辉|沃尔玛|宜家)',
+    "expense-food": r'(小女当家|饺子|老乡鸡|餐饮|包子|美食|零食|肠粉|螺蛳粉|糖水|小女创维旗舰店|鸡煲|饭店|餐厅|牛饭饭|饭馆|御蝶坊|赵记传承|水果|便利店|汤包|火锅|饭|面|饿了么|麦当劳|蜜雪冰城|糕点|星巴克|瑞幸|luckin coffee|肯德基|奈雪|喜茶|茶颜悦色|奶茶|新力有家)',
+    "expense-traffic": r'(中铁网络|高德打车|携程|同程旅行|滴滴|顺风车|深圳通|航空|地铁|公交|出租车|铁路|岭南通)',
+    "expense-medical": r'(医院|药房|药店|药行|妇幼保健院)',
+    "expense-mobile-credit": r'(中国联通|浙江联通|广东联通|广东移动|广东电信|四川联通|四川移动|四川电信|话费)',
+    "expense-house-hotel": r'(酒店|民宿|宾馆)',
+    "expense-house-rent": r'(智小窝|房东)'
+}
+
+# 根据交易类型判断分类
+TRANSACTION_TYPE_CATEGORY_REG_INCOME_MAP = {
+    "income-transfer": r'(微信红包|转账|群收款)',
+    "income-refund": r'(退款)'
+}
+
+TRANSACTION_TYPE_CATEGORY_REG_EXPENSE_MAP = {
+    "expense-transfer": r'(微信红包|转账|群收款)',
 }
 
 
@@ -101,14 +118,27 @@ class WechatBillParser:
             if transaction_type == TransactionType.INCOME:
                 source_account_id = None
                 target_account_id = account_id
-            elif transaction_type == TransactionType.EXPENSE:
-                source_account_id = account_id
-                target_account_id = None
-                for cc, reg in CATEGORY_REG_MATCH_MAP.items():
-                    if re.compile(reg).search(row["交易对方"]):
+                for cc, reg in TRANSACTION_TYPE_CATEGORY_REG_INCOME_MAP.items():
+                    if re.compile(reg).search(row["交易类型"]):
                         category_code = cc 
                         break
                     category_code = None
+
+            elif transaction_type == TransactionType.EXPENSE:
+                source_account_id = account_id
+                target_account_id = None
+                for cc, reg in TRANSACTION_TARGET_CATEGORY_REG_EXPENSE_MAP.items():
+                    if re.compile(reg).search(row["交易对方"]):
+                        category_code = cc 
+                        break
+                    else:
+                        category_code = None
+
+                if not category_code:
+                    for cc, reg in TRANSACTION_TYPE_CATEGORY_REG_EXPENSE_MAP.items():
+                        if re.compile(reg).search(row["交易类型"]):
+                            category_code = cc 
+                            break
                         
             else:
                 source_account_id = target_account_id = None

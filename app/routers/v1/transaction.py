@@ -48,13 +48,22 @@ async def summarize_transaction(
     transaction_type: TransactionType | None = None,
     start_time: datetime | None = None,
     end_time: datetime | None = None,
+    category_id: str | None = None,
+    target_account_id: str | None = None
 ):
+    if category_id:
+        category_id = [str(x.strip()) for x in category_id.split(",")]
+    if target_account_id:
+        target_account_id = [str(x.strip()) for x in target_account_id.split(",")]
+
     data = await TransactionService().summary(
         session,
         cur_user,
         transaction_type=transaction_type,
         start_time=start_time,
         end_time=end_time,
+        category_id=category_id,
+        target_account_id=target_account_id
     )
     return make_response(data=data)
 

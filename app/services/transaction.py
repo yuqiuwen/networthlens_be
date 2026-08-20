@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import List, Literal
 
 from app.repo.category import category_repo
 from app.schemas.category import CategorySchema
@@ -127,6 +127,8 @@ class TransactionService:
         transaction_type=None,
         start_time=None,
         end_time=None,
+        category_id: List[str] =None, 
+        target_account_id: List[str] =None,
     ):
         income = 0
         expense = 0
@@ -138,6 +140,8 @@ class TransactionService:
                 transaction_type=TransactionType.INCOME,
                 start_time=start_time,
                 end_time=end_time,
+                category_id=category_id,
+                target_account_id=target_account_id,
             )
 
         if transaction_type in (None, TransactionType.EXPENSE):
@@ -147,6 +151,8 @@ class TransactionService:
                 transaction_type=TransactionType.EXPENSE,
                 start_time=start_time,
                 end_time=end_time,
+                category_id=category_id,
+                target_account_id=target_account_id,
             )
 
         income = int(income or 0)
