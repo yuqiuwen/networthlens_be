@@ -231,6 +231,7 @@ class TransactionType(IntEnumPro):
     BORROW_OUT = 5, "借出"
     REPAYMENT = 6, "还款"
     ADJUST = 7, "调整"
+    REFUND = 8, "冲减消费"
 
 
 class TransactionStatus(IntEnumPro):
@@ -436,3 +437,19 @@ class TransactionChannel(IntEnumPro):
 
 class UserSecretCode(EnumPro):
     DEFAULT = "default", "通用"
+
+
+
+class InsightLevel(Enum):
+    INFO = "info"
+    SUCCESS = "success"
+    WARNING = "warning"
+
+
+class InsightType(Enum):
+    EXPENSE_CHANGE = "expense_change"
+    INCOME_CHANGE = "income_change"
+    SAVING = "saving"
+    ASSET_CHANGE = "asset_change"
+    ABNORMAL_EXPENSE = "abnormal_expense"
+    CASH_SAFETY = "cash_safety"

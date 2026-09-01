@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from app.schemas.category import CategorySchema
+
 
 AnalysisGranularity = Literal["week", "month", "year"]
 TransactionRankType = Literal["income", "expense"]
@@ -53,6 +55,7 @@ class TransactionRankQuery(BaseAnalysisQuery):
 
 class AssetAnalysisQuery(BaseAnalysisQuery):
     asset_types: list[int] | None = None
+    category_ids: list[str] | None = None
 
 
 class GoalAnalysisQuery(BaseAnalysisQuery):
@@ -144,6 +147,7 @@ class AssetAllocationItem(BaseModel):
     asset_name: str
     amount: int
     ratio: float
+    category: CategorySchema | None = None
 
     @field_serializer("amount")
     def serialize_amount(self, value: int) -> Decimal:

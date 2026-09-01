@@ -93,6 +93,7 @@ class Asset(BaseModel, TimeModel):
     id = Column(String(26), primary_key=True)
     user_id = Column(BigInteger, nullable=False)
     asset_type = Column(Integer, nullable=False)
+    category_id = Column(String(26), index=True)
     name = Column(String(100), nullable=False)
     quantity = Column(Numeric(24, 8), nullable=False, server_default=text("0"))
     unit = Column(String(20))
@@ -108,8 +109,15 @@ class Asset(BaseModel, TimeModel):
     note = Column(Text)
     deleted_id = Column(String(26), nullable=False, default="0")
 
+    category = relationship(
+        "Category",
+        primaryjoin="foreign(Asset.category_id) == Category.id",
+        viewonly=True,
+        lazy="selectin",
+    )
     __table_args__ = (
         Index(None, "user_id", "asset_type"),
+        Index(None, "user_id", "category_id"),
         Index(None, "user_id", "status"),
     )
 
@@ -135,6 +143,18 @@ class AssetValuationHistory(BaseModel, TimeModel):
     )
 
     __table_args__ = (Index(None, "asset_id", "valuation_date"),)
+
+
+class WealthSnapshot(Base):
+    __tablename__ = "wealth_snapshots"
+    __table_args__ = (UniqueConstraint("user_id", "snapshot_date", name=None),)
+
+    id = Column(String(26), primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    snapshot_date = Column(Date, nullable=False)
+    account_value = Column(BigInteger, nullable=False, server_default=text("0"), index=True)
+    asset_value = Column(BigInteger, nullable=False, server_default=text("0"), index=True)
+    total_assets = Column(BigInteger, nullable=False, server_default=text("0"), index=True)
 
 
 class Liability(BaseModel, TimeModel):

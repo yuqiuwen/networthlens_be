@@ -2,6 +2,7 @@ from datetime import date
 
 from pydantic import BaseModel
 
+from app.schemas.category import CategorySchema
 from app.schemas.common import EntityModel
 from app.constant import (
     AssetStatus,
@@ -14,6 +15,7 @@ from app.constant import (
 class CreateAssetSchema(BaseModel):
     asset_type: AssetType
     name: str
+    category_id: str
 
     quantity: float = 0
     unit: str | None = None
@@ -37,6 +39,7 @@ class CreateAssetSchema(BaseModel):
 class UpdateAssetSchema(BaseModel):
     name: str | None = None
     quantity: float | None = None
+    category_id: str | None = None
     purchase_amount: int | None = None
     current_value: int | None = None
     valuation_method: AssetValuationMethod | None = None
@@ -49,12 +52,15 @@ class AssetQuerySchema(BaseModel):
     limit: int = 20
 
     asset_type: AssetType | None = None
+    category_ids: str | None = None
     status: AssetStatus | None = None
 
 
-class AssetListSchema(BaseModel):
+class AssetListSchema(EntityModel):
     id: str
     asset_type: AssetType
+    category_id: str | None = None
+    category: CategorySchema | None = None
     name: str
     current_value: int
     currency: str
@@ -65,6 +71,7 @@ class AssetDetailSchema(EntityModel):
     id: str
     asset_type: AssetType
     name: str
+    category_id: str | None = None
 
     quantity: float
     unit: str | None

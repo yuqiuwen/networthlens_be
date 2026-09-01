@@ -33,6 +33,8 @@ async def list_asset(
     cur_user: RequireAuthDep,
     query: AssetQuerySchema = Depends(),
 ):
+    if query.category_ids:
+        query.category_ids = [str(x.strip()) for x in query.category_ids.split(",")]
     ret = await AssetService().list(session, cur_user, query)
     return make_response(data=ret)
 

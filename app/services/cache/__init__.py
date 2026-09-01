@@ -14,7 +14,9 @@ class CacheKey(Enum):
     UNREAD_MSG_CNT = "unread_msg_counter:{}"  # 用户未读消息计数：{用户id}
     JWT_TOKEN = "jwt_token:{}:{}:{}-{}"  # JWT令牌：{app_name}:{token类型}:{user_id}-{jti}
 
-    COUNTER_ANNIV = "counter_anniv:{}"  # {anniv_id}
+    OVERVIEW_METRICS = "overview_metrics:{}:{}"   # 总览统计：{user_id}:{query}
+
+    
 
 
 class BaseCache(ABC):

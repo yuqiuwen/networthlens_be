@@ -1,11 +1,17 @@
+from datetime import date, datetime
+from decimal import Decimal
 import random
-from typing import List
+from typing import List, Sequence
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.constant import TransactionType
 from app.repo.category import category_repo
-from sqlalchemy import func, select
+from sqlalchemy import func, select, case
 
 from app.core.exception import APIException
 from app.models._mixin import BaseMixin
 from app.models.transaction import Transaction, gen_transaction_id
+from app.schemas.stats import TrendGranularity
 from app.schemas.transaction import CreateTransactionSchema, TransactionQuerySchema
 from app.utils.common import gen_ulid
 from app.utils.dater import DT
@@ -25,9 +31,9 @@ class TransactionRepo(BaseMixin[Transaction]):
         user_id: int,
         *,
         transaction_type=None,
-        category_id: List[str] =None,
+        category_id: List[str] = None,
         source_account_id=None,
-        target_account_id: List[str]=None,
+        target_account_id: List[str] = None,
         start_time,
         end_time,
     ):
@@ -172,20 +178,20 @@ class TransactionRepo(BaseMixin[Transaction]):
         """Insert imported records while ignoring concurrent duplicate transaction IDs."""
         if not records:
             return 0
-        
+
         data = [
             {
                 "id": gen_ulid(),
                 "user_id": user_id,
                 **item,
-            } for item in records
+            }
+            for item in records
         ]
         return await self.insert_do_update(
             session,
             data,
             index_elements=["channel", "transaction_id"],
         )
-      
 
     async def soft_delete(
         self,
@@ -212,11 +218,11 @@ class TransactionRepo(BaseMixin[Transaction]):
         session,
         user_id: int,
         *,
-        transaction_type=None,
+        transaction_type: Sequence[TransactionType] | TransactionType | None = None,
         start_time=None,
         end_time=None,
-        category_id: list[str] =None,
-        target_account_id: list[str]=None,
+        category_id: list[str] = None,
+        target_account_id: list[str] = None,
     ):
         cond = [
             self.model.user_id == user_id,
@@ -224,7 +230,10 @@ class TransactionRepo(BaseMixin[Transaction]):
         ]
 
         if transaction_type:
-            cond.append(self.model.transaction_type == transaction_type)
+            if isinstance(transaction_type, list):
+                cond.append(self.model.transaction_type.in_(transaction_type))
+            else:
+                cond.append(self.model.transaction_type == transaction_type)
 
         if start_time:
             cond.append(self.model.occurred_at >= start_time)
@@ -237,7 +246,7 @@ class TransactionRepo(BaseMixin[Transaction]):
                 cond.append(self.model.category_id == category_id[0])
             else:
                 cond.append(self.model.category_id.in_(category_id))
-        
+
         if target_account_id:
             if len(target_account_id) > 1:
                 cond.append(self.model.target_account_id.in_(target_account_id))
@@ -255,6 +264,137 @@ class TransactionRepo(BaseMixin[Transaction]):
 
         return ret.scalar_one()
 
+    async def aggregate_cash_flow(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        start: date | datetime,
+        end: date | datetime,
+        granularity: TrendGranularity,
+    ):
+        # ----------------------------
+        # 1. 时间分桶
+        # ----------------------------
+
+        if granularity == TrendGranularity.DAY:
+            bucket = func.date(Transaction.occurred_at)
+
+        elif granularity == TrendGranularity.MONTH:
+            bucket = func.date_trunc(
+                "month",
+                Transaction.occurred_at,
+            )
+
+        else:
+            raise ValueError(f"Unsupported granularity: {granularity}")
+
+        # ----------------------------
+        # 2. 收入
+        # ----------------------------
+
+        income_expr = case(
+            (
+                Transaction.transaction_type == TransactionType.INCOME,
+                Transaction.amount,
+            ),
+            else_=Decimal("0"),
+        )
+
+        # ----------------------------
+        # 3. 支出
+        #
+        # expense = 正常消费
+        # refund  = 冲减消费
+        # ----------------------------
+
+        expense_expr = case(
+            (
+                Transaction.transaction_type == TransactionType.EXPENSE,
+                Transaction.amount,
+            ),
+            (
+                Transaction.transaction_type == TransactionType.REFUND,
+                -Transaction.amount,
+            ),
+            else_=Decimal("0"),
+        )
+
+        # ----------------------------
+        # 4. 查询
+        # ----------------------------
+
+        stmt = (
+            select(
+                bucket.label("bucket"),
+                func.coalesce(
+                    func.sum(income_expr),
+                    0,
+                ).label("income"),
+                func.coalesce(
+                    func.sum(expense_expr),
+                    0,
+                ).label("expense"),
+            )
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.occurred_at >= start,
+                Transaction.occurred_at < end,
+                Transaction.transaction_type.in_(
+                    [
+                        TransactionType.INCOME,
+                        TransactionType.EXPENSE,
+                        TransactionType.REFUND,
+                    ]
+                ),
+            )
+            .group_by(bucket)
+            .order_by(bucket)
+        )
+
+        result = await session.execute(stmt)
+
+        return result.all()
+
+    async def agg_expense_category(self, session, user_id, start: date, end: date):
+        expense_amount = case(
+            (
+                Transaction.transaction_type == TransactionType.EXPENSE,
+                Transaction.amount,
+            ),
+            (
+                Transaction.transaction_type == TransactionType.REFUND,
+                -Transaction.amount,
+            ),
+            else_=Decimal("0"),
+        )
+
+        stmt = (
+            select(
+                Transaction.category_id,
+                func.coalesce(func.sum(expense_amount), 0).label("amount"),
+                func.count(
+                    case(
+                        (
+                            Transaction.transaction_type == TransactionType.EXPENSE,
+                            Transaction.id,
+                        )
+                    )
+                ).label("transaction_count"),
+            )
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.occurred_at >= start,
+                Transaction.occurred_at < end,
+                Transaction.transaction_type.in_([TransactionType.EXPENSE, TransactionType.REFUND]),
+            )
+            .group_by(
+                Transaction.category_id,
+            )
+        )
+
+        result = await session.execute(stmt)
+
+        return result.all()
 
 
 transaction_repo = TransactionRepo(Transaction)

@@ -1,8 +1,11 @@
-from sqlalchemy import select
+from typing import List
+from app.constant import AccountStatus
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models._mixin import BaseMixin
 from app.models.asset import Account
+from app.schemas.stats import TrendGranularity
 
 
 class AccountRepo(BaseMixin[Account]):
@@ -32,7 +35,7 @@ class AccountRepo(BaseMixin[Account]):
         account_type=None,
         status=None,
         name=None
-    ):
+    ) -> List[Account]:
         stmt = (
             select(Account)
             .where(
@@ -54,6 +57,15 @@ class AccountRepo(BaseMixin[Account]):
 
         ret = await session.execute(stmt)
         return ret.scalars().all()
+
+    async def sum_balance(self, session, user_id):
+        stmt = select(func.sum(self.model.balance)).where(
+            self.model.user_id == user_id,
+            self.model.status == AccountStatus.NORMAL
+        )
+        ret = await session.execute(stmt)
+        return ret.scalar_one()
+
 
     async def retrieve(
         self,

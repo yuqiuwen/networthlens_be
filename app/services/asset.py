@@ -37,6 +37,7 @@ class AssetService:
             session,
             cur_user.id,
             asset_type=query.asset_type,
+            category_ids=query.category_ids,
             status=query.status,
             page=query.page,
             limit=query.limit,

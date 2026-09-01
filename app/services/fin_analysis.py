@@ -355,6 +355,7 @@ class FinancialAnalysisService:
                 session,
                 user_id,
                 asset_types=query.asset_types,
+                category_ids=query.category_ids
             )
         )
 
@@ -371,6 +372,8 @@ class FinancialAnalysisService:
                     AssetAllocationItem(
                         asset_type=item.asset_type,
                         asset_name=item.name,
+                        category_id=item.category_id,
+                        category=item.category,
                         amount=item.current_value,
                         ratio=round(
                             item.current_value

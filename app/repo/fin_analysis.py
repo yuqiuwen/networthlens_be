@@ -48,50 +48,24 @@ class FinancialAnalysisRepo:
         ]
 
         if start_time:
-            cond.append(
-                Transaction.occurred_at >= start_time
-            )
+            cond.append(Transaction.occurred_at >= start_time)
 
         if end_time:
-            cond.append(
-                Transaction.occurred_at <= end_time
-            )
+            cond.append(Transaction.occurred_at <= end_time)
 
         if transaction_types:
-            cond.append(
-                Transaction.transaction_type.in_(
-                    transaction_types
-                )
-            )
+            cond.append(Transaction.transaction_type.in_(transaction_types))
 
         if category_ids:
-            cond.append(
-                Transaction.category_id.in_(
-                    category_ids
-                )
-            )
+            cond.append(Transaction.category_id.in_(category_ids))
 
         if source_account_ids:
-            cond.append(
-                Transaction.source_account_id.in_(
-                    source_account_ids
-                )
-            )
+            cond.append(Transaction.source_account_id.in_(source_account_ids))
 
         if target_account_ids:
-            cond.append(
-                Transaction.target_account_id.in_(
-                    target_account_ids
-                )
-            )
+            cond.append(Transaction.target_account_id.in_(target_account_ids))
 
-        stmt = (
-            select(Transaction)
-            .where(*cond)
-            .order_by(
-                Transaction.occurred_at.desc()
-            )
-        )
+        stmt = select(Transaction).where(*cond).order_by(Transaction.occurred_at.desc())
 
         ret = await session.execute(stmt)
 
@@ -112,19 +86,14 @@ class FinancialAnalysisRepo:
         cond = [
             Transaction.user_id == user_id,
             Transaction.deleted_id == "0",
-            Transaction.transaction_type
-            == transaction_type,
+            Transaction.transaction_type == transaction_type,
         ]
 
         if start_time:
-            cond.append(
-                Transaction.occurred_at >= start_time
-            )
+            cond.append(Transaction.occurred_at >= start_time)
 
         if end_time:
-            cond.append(
-                Transaction.occurred_at <= end_time
-            )
+            cond.append(Transaction.occurred_at <= end_time)
 
         if category_ids:
             cond.append(Transaction.category_id.in_(category_ids))
@@ -143,7 +112,7 @@ class FinancialAnalysisRepo:
         ).where(*cond)
 
         ret = await session.execute(stmt)
-        
+
         return ret.scalar_one()
 
     async def expense_by_category(
@@ -160,19 +129,14 @@ class FinancialAnalysisRepo:
         cond = [
             Transaction.user_id == user_id,
             Transaction.deleted_id == "0",
-            Transaction.transaction_type
-            == TransactionType.EXPENSE,
+            Transaction.transaction_type == TransactionType.EXPENSE,
         ]
 
         if start_time:
-            cond.append(
-                Transaction.occurred_at >= start_time
-            )
+            cond.append(Transaction.occurred_at >= start_time)
 
         if end_time:
-            cond.append(
-                Transaction.occurred_at <= end_time
-            )
+            cond.append(Transaction.occurred_at <= end_time)
 
         if category_ids:
             cond.append(Transaction.category_id.in_(category_ids))
@@ -187,25 +151,18 @@ class FinancialAnalysisRepo:
             select(
                 Transaction.category_id,
                 Category.name,
-                func.sum(
-                    Transaction.amount
-                ).label("amount"),
+                func.sum(Transaction.amount).label("amount"),
             )
             .outerjoin(
                 Category,
-                Category.id
-                == Transaction.category_id,
+                Category.id == Transaction.category_id,
             )
             .where(*cond)
             .group_by(
                 Transaction.category_id,
                 Category.name,
             )
-            .order_by(
-                func.sum(
-                    Transaction.amount
-                ).desc()
-            )
+            .order_by(func.sum(Transaction.amount).desc())
         )
 
         ret = await session.execute(stmt)
@@ -231,9 +188,7 @@ class FinancialAnalysisRepo:
         cond = [
             Transaction.user_id == user_id,
             Transaction.deleted_id == "0",
-            Transaction.transaction_type.in_(
-                [TransactionType.INCOME, TransactionType.EXPENSE]
-            ),
+            Transaction.transaction_type.in_([TransactionType.INCOME, TransactionType.EXPENSE]),
         ]
 
         if start_time:
@@ -277,12 +232,7 @@ class FinancialAnalysisRepo:
             0,
         ).label("expense")
 
-        stmt = (
-            select(period, income, expense)
-            .where(*cond)
-            .group_by(period)
-            .order_by(period.asc())
-        )
+        stmt = select(period, income, expense).where(*cond).group_by(period).order_by(period.asc())
 
         result = await session.execute(stmt)
         return result.all()
@@ -321,9 +271,7 @@ class FinancialAnalysisRepo:
             cond.append(Transaction.occurred_at <= end_time)
 
         amount_order = (
-            Transaction.amount.asc()
-            if sort_order == "asc"
-            else Transaction.amount.desc()
+            Transaction.amount.asc() if sort_order == "asc" else Transaction.amount.desc()
         )
         stmt = (
             select(
@@ -359,6 +307,7 @@ class FinancialAnalysisRepo:
         user_id: int,
         *,
         asset_types: list[int] | None = None,
+        category_ids: list[int] | None = None,
     ) -> List[Asset]:
         cond = [
             Asset.user_id == user_id,
@@ -366,19 +315,11 @@ class FinancialAnalysisRepo:
         ]
 
         if asset_types:
-            cond.append(
-                Asset.asset_type.in_(
-                    asset_types
-                )
-            )
+            cond.append(Asset.asset_type.in_(asset_types))
+        if category_ids:
+            cond.append(Asset.category_id.in_(category_ids))
 
-        stmt = (
-            select(Asset)
-            .where(*cond)
-            .order_by(
-                Asset.current_value.desc()
-            )
-        )
+        stmt = select(Asset).where(*cond).order_by(Asset.current_value.desc())
 
         ret = await session.execute(stmt)
 
@@ -396,9 +337,7 @@ class FinancialAnalysisRepo:
 
         stmt = select(
             func.coalesce(
-                func.sum(
-                    Asset.current_value
-                ),
+                func.sum(Asset.current_value),
                 0,
             )
         ).where(*cond)
@@ -416,8 +355,7 @@ class FinancialAnalysisRepo:
         session,
         user_id: int,
         *,
-        liability_types: list[int]
-        | None = None,
+        liability_types: list[int] | None = None,
     ):
         cond = [
             Liability.user_id == user_id,
@@ -425,19 +363,9 @@ class FinancialAnalysisRepo:
         ]
 
         if liability_types:
-            cond.append(
-                Liability.liability_type.in_(
-                    liability_types
-                )
-            )
+            cond.append(Liability.liability_type.in_(liability_types))
 
-        stmt = (
-            select(Liability)
-            .where(*cond)
-            .order_by(
-                Liability.ctime.desc()
-            )
-        )
+        stmt = select(Liability).where(*cond).order_by(Liability.ctime.desc())
 
         ret = await session.execute(stmt)
 
@@ -451,15 +379,12 @@ class FinancialAnalysisRepo:
         cond = [
             Liability.user_id == user_id,
             Liability.deleted_id == "0",
-            Liability.status
-            == LiabilityStatus.ACTIVE,
+            Liability.status == LiabilityStatus.ACTIVE,
         ]
 
         stmt = select(
             func.coalesce(
-                func.sum(
-                    Liability.remaining_principal
-                ),
+                func.sum(Liability.remaining_principal),
                 0,
             )
         ).where(*cond)
@@ -481,14 +406,10 @@ class FinancialAnalysisRepo:
         stmt = (
             select(
                 Liability.status,
-                func.count(
-                    Liability.id
-                ).label("count"),
+                func.count(Liability.id).label("count"),
             )
             .where(*cond)
-            .group_by(
-                Liability.status
-            )
+            .group_by(Liability.status)
         )
 
         ret = await session.execute(stmt)
@@ -513,9 +434,7 @@ class FinancialAnalysisRepo:
         ]
 
         if goal_ids:
-            cond.append(
-                Goal.id.in_(goal_ids)
-            )
+            cond.append(Goal.id.in_(goal_ids))
 
         stmt = (
             select(Goal)
@@ -542,9 +461,7 @@ class FinancialAnalysisRepo:
 
         stmt = select(
             func.coalesce(
-                func.sum(
-                    Goal.target_amount
-                ),
+                func.sum(Goal.target_amount),
                 0,
             )
         ).where(*cond)
@@ -565,9 +482,7 @@ class FinancialAnalysisRepo:
 
         stmt = select(
             func.coalesce(
-                func.sum(
-                    Goal.current_amount
-                ),
+                func.sum(Goal.current_amount),
                 0,
             )
         ).where(*cond)
