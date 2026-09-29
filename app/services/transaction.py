@@ -5,13 +5,21 @@ from typing import List, Literal
 
 from app.repo.category import category_repo
 from app.schemas.category import CategorySchema
+from app.services.cache.stats import OverviewMetricsCache
 from fastapi import UploadFile
 
-from app.constant import TransactionChannel, TransactionType
+from app.constant import CategoryType, TransactionChannel, TransactionType
 from app.core.exception import APIException
 from app.repo.account import account_repo
-from app.repo.transaction import transaction_repo
-from app.schemas.transaction import CreateTransactionSchema, TransactionListSchema, TransactionQuerySchema, UpdateTransactionSchema
+from app.repo.transaction import transaction_category_word_repo, transaction_repo
+from app.schemas.transaction import (
+    CreateTransCategoryWordSchema,
+    CreateTransactionSchema,
+    TransCategoryWordItem,
+    TransactionListSchema,
+    TransactionQuerySchema,
+    UpdateTransactionSchema,
+)
 from app.services.bill_parser.alipay_parser import AlipayBillParser
 from app.services.bill_parser.wechat_parser import WechatBillParser
 from app.utils.common import gen_ulid
@@ -24,11 +32,11 @@ class TransactionService:
         cur_user,
         data: CreateTransactionSchema,
     ):
-
+        if data.transaction_type == TransactionType.EXPENSE and data.amount > 0:
+            data.amount = -data.amount
         ret = await transaction_repo.add(session, cur_user, data)
 
         return ret
-
 
     async def create_by_agent(
         self,
@@ -45,7 +53,7 @@ class TransactionService:
         product: str | None = None,
         occurred_at=None,
         note: str | None = None,
-        ):
+    ):
         """
         Agent专用创建流水
 
@@ -63,30 +71,26 @@ class TransactionService:
         if occurred_at is None:
             occurred_at = datetime.now()
 
-        transaction = (
-            await transaction_repo.create(
-                session,
-                {
-                    "id": gen_ulid(),
-                    "user_id": user_id,
-                    "channel": channel,
-                    "transaction_type": transaction_type,
-                    "category_id": category_id,
-                    "source_account_id": source_account_id,
-                    "target_account_id": target_account_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "merchant": merchant,
-                    "product": product,
-                    "occurred_at": occurred_at,
-                    "note": note,
-                },
-            )
+        transaction = await transaction_repo.create(
+            session,
+            {
+                "id": gen_ulid(),
+                "user_id": user_id,
+                "channel": channel,
+                "transaction_type": transaction_type,
+                "category_id": category_id,
+                "source_account_id": source_account_id,
+                "target_account_id": target_account_id,
+                "amount": amount,
+                "currency": currency,
+                "merchant": merchant,
+                "product": product,
+                "occurred_at": occurred_at,
+                "note": note,
+            },
         )
 
         return transaction.id
-        
-
 
     async def list(
         self,
@@ -94,16 +98,16 @@ class TransactionService:
         cur_user,
         query: TransactionQuerySchema,
     ):
-        
+
         paged = await transaction_repo.page(
             session,
             cur_user.id,
             query,
         )
-        category_ids = [i.category_id for i in  paged.items if i.category_id]
+        category_ids = [i.category_id for i in paged.items if i.category_id]
         if category_ids:
             items: list[TransactionListSchema] = []
-            
+
             category_list = await category_repo.list_by_user(session, cur_user.id, ids=category_ids)
             category_mapping = {c.id: c for c in category_list}
             for t in paged.items:
@@ -118,7 +122,6 @@ class TransactionService:
 
         return paged
 
-
     async def summary(
         self,
         session,
@@ -127,8 +130,9 @@ class TransactionService:
         transaction_type=None,
         start_time=None,
         end_time=None,
-        category_id: List[str] =None, 
-        target_account_id: List[str] =None,
+        category_id: List[str] = None,
+        target_account_id: List[str] = None,
+        keywords: str = None
     ):
         income = 0
         expense = 0
@@ -142,6 +146,7 @@ class TransactionService:
                 end_time=end_time,
                 category_id=category_id,
                 target_account_id=target_account_id,
+                keywords=keywords
             )
 
         if transaction_type in (None, TransactionType.EXPENSE):
@@ -153,6 +158,7 @@ class TransactionService:
                 end_time=end_time,
                 category_id=category_id,
                 target_account_id=target_account_id,
+                keywords=keywords
             )
 
         income = int(income or 0)
@@ -160,9 +166,8 @@ class TransactionService:
         return {
             "income": income,
             "expense": expense,
-            "balance": income - expense,
+            "balance": income + expense,
         }
-
 
     async def detail(
         self,
@@ -170,12 +175,10 @@ class TransactionService:
         cur_user,
         transaction_id,
     ):
-        transaction = (
-            await transaction_repo.detail(
-                session,
-                transaction_id,
-                cur_user.id,
-            )
+        transaction = await transaction_repo.detail(
+            session,
+            transaction_id,
+            cur_user.id,
         )
 
         if not transaction:
@@ -186,7 +189,6 @@ class TransactionService:
 
         return transaction
 
-
     async def update(
         self,
         session,
@@ -194,12 +196,10 @@ class TransactionService:
         transaction_id,
         data: UpdateTransactionSchema,
     ):
-        transaction = (
-            await transaction_repo.detail(
-                session,
-                transaction_id,
-                cur_user.id,
-            )
+        transaction = await transaction_repo.detail(
+            session,
+            transaction_id,
+            cur_user.id,
         )
 
         if not transaction:
@@ -211,13 +211,10 @@ class TransactionService:
         await transaction_repo.update(
             session,
             transaction,
-            data.model_dump(
-                exclude_unset=True
-            ),
+            data.model_dump(exclude_unset=True),
         )
 
         return True
-
 
     async def delete(
         self,
@@ -225,12 +222,10 @@ class TransactionService:
         cur_user,
         transaction_id,
     ):
-        transaction = (
-            await transaction_repo.detail(
-                session,
-                transaction_id,
-                cur_user.id,
-            )
+        transaction = await transaction_repo.detail(
+            session,
+            transaction_id,
+            cur_user.id,
         )
 
         if not transaction:
@@ -246,7 +241,6 @@ class TransactionService:
         )
 
         return True
-
 
     async def import_excel(
         self,
@@ -264,11 +258,13 @@ class TransactionService:
         if account_id:
             await account_repo.retrieve(session, account_id, cur_user.id)
 
-        user_category = await category_repo.list_by_user(session, cur_user.id)
-        category_mapping = {c.code: c.id for c in user_category}
-
         parser = WechatBillParser if import_source == "wx" else AlipayBillParser
         account_mapping = None
+        category_rules = await self.list_trans_category_word(
+            session,
+            cur_user.id,
+        )
+
         try:
             await file.seek(0)
             if import_source == "wx":
@@ -281,12 +277,13 @@ class TransactionService:
                 account_mapping = {account.name: account.id for account in accounts}
 
             await file.seek(0)
+
             if import_source == "wx":
                 rows = WechatBillParser.parse(
                     file.file,
                     filename,
                     account_mapping=account_mapping,
-                    category_mapping=category_mapping
+                    category_rules=category_rules,
                 )
             else:
                 rows = parser.parse(file.file, filename)
@@ -318,6 +315,8 @@ class TransactionService:
             data,
         )
 
+        await OverviewMetricsCache(cur_user.id, None).delete()
+
         return {
             "success_count": success_count,
             "failed_count": 0,
@@ -329,5 +328,20 @@ class TransactionService:
         session,
         cur_user,
         query,
+    ): ...
+
+    async def list_trans_category_word(self, session, user_id):
+        rows = await transaction_category_word_repo.list(session, user_id)
+        return [TransCategoryWordItem.model_validate(i) for i in rows]
+
+    async def create_trans_category_word(
+        self, session, user_id, data: CreateTransCategoryWordSchema
     ):
-        ...
+        await transaction_category_word_repo.add(session, user_id, data.model_dump())
+        return
+
+    async def update_trans_category_word(self, session, user_id, pk, words: List[str]):
+        return await transaction_category_word_repo.edit(session, user_id, pk, {"words": words})
+
+    async def delete_trans_category_word(self, session, user_id, ids: List[int]):
+        return await transaction_category_word_repo.remove(session, user_id, ids)

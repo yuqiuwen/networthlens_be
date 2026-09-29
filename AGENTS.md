@@ -79,8 +79,8 @@ tech-stack：Python FastAPI + PostgreSQL + Redis + Celery + PydanticAI
 - 所有数据库操作通过 Repo 层，路由层和服务层不直接操作 ORM
 - Repo层命名：新增-add、编辑-edit、删除-remove、查询-retrieve、查询列表-list、批量创建-batch_add
 - 请求库使用`httpx`，不要使用`requests`
-- 避免 hard coding
-- 原则上函数行数不宜过长
+- 禁止hard-coding，枚举统一在constant.py中定义，不要使用`if status == "pending"`或`variable = 1`这种形式的硬编码
+- 函数要保证易读可扩展，原则上业务层函数行数不能过长，最多不要超过80行，超长需要拆分多个函数
 
 
 ## 错误处理

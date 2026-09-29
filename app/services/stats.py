@@ -143,7 +143,7 @@ class StatsService:
         target_date = query.query_date or date.today()
 
         current_range, previous_range = cls.resolve_period_with_previous(
-            target_date, query.period, query.query_date
+            target_date, query.period
         )
 
         income = await transaction_repo.sum_amount(
@@ -192,8 +192,8 @@ class StatsService:
             end_time=previous_range.end_date,
         )
 
-        balance = income - expense
-        previous_balance = previous_income - previous_expense
+        balance = income + expense
+        previous_balance = previous_income + previous_expense
 
         available_funds = await account_repo.sum_balance(session, user_id)
 
@@ -217,7 +217,7 @@ class StatsService:
 
         income_change, income_change_rate = cls.calc_change(income, previous_income)
 
-        expense_change, expense_change_rate = cls.calc_change(expense, previous_expense)
+        expense_change, expense_change_rate = cls.calc_change(abs(expense), abs(previous_expense))
 
         balance_change = balance - previous_balance
 
@@ -247,7 +247,7 @@ class StatsService:
     @classmethod
     async def get_cash_flow(cls, session, cur_user, query: DashboardQuery):
         current_range, _ = cls.resolve_period_with_previous(
-            query.query_date or date.today(), query.period, query.query_date
+            query.query_date or date.today(), query.period
         )
         rows = await transaction_repo.aggregate_cash_flow(
             session=session,
@@ -271,7 +271,7 @@ class StatsService:
                     bucket_date=bucket_date,
                     income=cents_to_yuan(row.income),
                     expense=cents_to_yuan(row.expense),
-                    balance=cents_to_yuan(row.income - row.expense),
+                    balance=cents_to_yuan(row.income + row.expense),
                 )
             )
 
@@ -280,7 +280,7 @@ class StatsService:
     @classmethod
     async def get_expense_category(cls, session, cur_user, query: DashboardQuery):
         cur_range, prev_range = cls.resolve_period_with_previous(
-            query.query_date or date.today(), query.period, query.query_date
+            query.query_date or date.today(), query.period
         )
         cur_rows = await transaction_repo.agg_expense_category(
             session, cur_user.id, cur_range.start_date, cur_range.end_date
@@ -311,7 +311,7 @@ class StatsService:
         for item in cur_rows:
             amount = Decimal(item.amount or 0)
 
-            if cur_total > 0:
+            if cur_total < 0:
                 percentage = (Decimal(amount) / Decimal(cur_total)).quantize(
                     Decimal("0.0001"), rounding=ROUND_HALF_UP
                 )
@@ -321,15 +321,15 @@ class StatsService:
             prev_amount = prev_map.get(item.category_id, Decimal("0"))
 
             change, rate = cls.calc_change(
-                amount,
-                prev_amount,
+                abs(amount),
+                abs(prev_amount),
             )
             category = category_mapping.get(item.category_id)
 
             item = ExpenseCategoryItem(
                 category_id=item.category_id,
                 category_name=category.name if category else None,
-                amount=cents_to_yuan(amount),
+                amount=-cents_to_yuan(amount),
                 transaction_count=item.transaction_count,
                 percentage=percentage,
                 change=cents_to_yuan(change),
@@ -419,7 +419,7 @@ class StatsService:
     @classmethod
     async def get_wealth_trend(cls, session, cur_user, query: DashboardQuery):
         current_range, _ = cls.resolve_period_with_previous(
-            query.query_date or date.today(), query.period, query.query_date
+            query.query_date or date.today(), query.period
         )
 
         rows = await wealth_snapshot_repo.agg_wealth_flow(

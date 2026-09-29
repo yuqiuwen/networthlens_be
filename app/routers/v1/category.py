@@ -52,5 +52,5 @@ async def delete_category(
     session: SessionDep,
     cur_user: RequireAuthDep,
 ):
-    ret = await CategoryService().update(session, cur_user, category_id)
+    ret = await CategoryService().delete(session, cur_user, category_id)
     return make_response(data=ret)

@@ -182,7 +182,7 @@ class FinancialAnalysisService:
 
         categories = []
 
-        if expense > 0:
+        if expense < 0:
             for row in category_rows:
                 categories.append(
                     ExpenseCategoryItem(
@@ -190,7 +190,7 @@ class FinancialAnalysisService:
                         category_name=row.name,
                         amount=row.amount,
                         ratio=round(
-                            row.amount / expense,
+                            row.amount / -expense,
                             4,
                         ),
                     )
@@ -199,7 +199,7 @@ class FinancialAnalysisService:
         return ExpenseAnalysisResult(
             income=income,
             expense=expense,
-            balance=income - expense,
+            balance=income + expense,
             top_categories=categories,
             granularity=query.granularity,
             trend=self._build_expense_trend(
@@ -327,7 +327,7 @@ class FinancialAnalysisService:
                 period=label,
                 income=income,
                 expense=expense,
-                balance=income - expense,
+                balance=income + expense,
             )
             for label, (income, expense) in sorted(values.items())
         ]

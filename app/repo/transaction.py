@@ -6,11 +6,11 @@ from typing import List, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.constant import TransactionType
 from app.repo.category import category_repo
-from sqlalchemy import func, select, case
+from sqlalchemy import func, select, case, or_
 
 from app.core.exception import APIException
 from app.models._mixin import BaseMixin
-from app.models.transaction import Transaction, gen_transaction_id
+from app.models.transaction import Transaction, TransactionCategoryWord, gen_transaction_id
 from app.schemas.stats import TrendGranularity
 from app.schemas.transaction import CreateTransactionSchema, TransactionQuerySchema
 from app.utils.common import gen_ulid
@@ -34,6 +34,7 @@ class TransactionRepo(BaseMixin[Transaction]):
         category_id: List[str] = None,
         source_account_id=None,
         target_account_id: List[str] = None,
+        keywords: str = None,
         start_time,
         end_time,
     ):
@@ -65,6 +66,13 @@ class TransactionRepo(BaseMixin[Transaction]):
 
         if end_time:
             cond.append(self.model.occurred_at <= end_time)
+        if keywords:
+            cond.append(
+                or_(
+                    self.model.merchant.ilike(f"%{keywords}%"),
+                    self.model.product.ilike(f"%{keywords}%"),
+                )
+            )
 
         return cond
 
@@ -115,6 +123,7 @@ class TransactionRepo(BaseMixin[Transaction]):
             category_id=category_id,
             source_account_id=query.source_account_id,
             target_account_id=target_account_id,
+            keywords=query.keywords,
             start_time=query.start_time,
             end_time=query.end_time,
         )
@@ -223,35 +232,17 @@ class TransactionRepo(BaseMixin[Transaction]):
         end_time=None,
         category_id: list[str] = None,
         target_account_id: list[str] = None,
+        keywords: str = None,
     ):
-        cond = [
-            self.model.user_id == user_id,
-            self.model.deleted_id == "0",
-        ]
-
-        if transaction_type:
-            if isinstance(transaction_type, list):
-                cond.append(self.model.transaction_type.in_(transaction_type))
-            else:
-                cond.append(self.model.transaction_type == transaction_type)
-
-        if start_time:
-            cond.append(self.model.occurred_at >= start_time)
-
-        if end_time:
-            cond.append(self.model.occurred_at <= end_time)
-
-        if category_id:
-            if len(category_id) == 1:
-                cond.append(self.model.category_id == category_id[0])
-            else:
-                cond.append(self.model.category_id.in_(category_id))
-
-        if target_account_id:
-            if len(target_account_id) > 1:
-                cond.append(self.model.target_account_id.in_(target_account_id))
-            else:
-                cond.append(self.model.target_account_id == target_account_id[0])
+        cond = self.build_query_cond(
+            user_id,
+            transaction_type=transaction_type,
+            start_time=start_time,
+            end_time=end_time,
+            category_id=category_id,
+            target_account_id=target_account_id,
+            keywords=keywords
+        )
 
         stmt = select(
             func.coalesce(
@@ -312,10 +303,6 @@ class TransactionRepo(BaseMixin[Transaction]):
                 Transaction.transaction_type == TransactionType.EXPENSE,
                 Transaction.amount,
             ),
-            (
-                Transaction.transaction_type == TransactionType.REFUND,
-                -Transaction.amount,
-            ),
             else_=Decimal("0"),
         )
 
@@ -343,7 +330,6 @@ class TransactionRepo(BaseMixin[Transaction]):
                     [
                         TransactionType.INCOME,
                         TransactionType.EXPENSE,
-                        TransactionType.REFUND,
                     ]
                 ),
             )
@@ -360,10 +346,6 @@ class TransactionRepo(BaseMixin[Transaction]):
             (
                 Transaction.transaction_type == TransactionType.EXPENSE,
                 Transaction.amount,
-            ),
-            (
-                Transaction.transaction_type == TransactionType.REFUND,
-                -Transaction.amount,
             ),
             else_=Decimal("0"),
         )
@@ -385,7 +367,7 @@ class TransactionRepo(BaseMixin[Transaction]):
                 Transaction.user_id == user_id,
                 Transaction.occurred_at >= start,
                 Transaction.occurred_at < end,
-                Transaction.transaction_type.in_([TransactionType.EXPENSE, TransactionType.REFUND]),
+                Transaction.transaction_type.in_([TransactionType.EXPENSE]),
             )
             .group_by(
                 Transaction.category_id,
@@ -397,4 +379,26 @@ class TransactionRepo(BaseMixin[Transaction]):
         return result.all()
 
 
+class TransactionCategoryWordRepo(BaseMixin[TransactionCategoryWord]):
+    async def list(self, session, user_id):
+        stmt = self.filter(self.model.user_id == user_id).order_by(
+            self.model.priority, self.model.id.desc()
+        )
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
+    async def add(self, session, user_id, data: dict):
+        return await self.create(session, {**data, "user_id": user_id})
+
+    async def edit(self, session, user_id, pk: int, data: dict):
+        return await self.query_update(
+            session, cond=(self.model.id == pk, self.model.user_id == user_id), data=data
+        )
+
+    async def remove(self, session, user_id, data: List[int]):
+        return await self.delete(session, self.model.user_id == user_id, self.model.id.in_(data))
+
+
 transaction_repo = TransactionRepo(Transaction)
+
+transaction_category_word_repo = TransactionCategoryWordRepo(TransactionCategoryWord)

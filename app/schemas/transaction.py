@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
+from app.models.asset import Category
 from app.schemas.category import CategorySchema
 from pydantic import BaseModel, Field
 
@@ -49,10 +50,12 @@ class TransactionQuerySchema(BaseModel):
 
     transaction_type: TransactionType | None = None
     category_id: str | None = None
+    merchant: str | None = None
     source_account_id: str | None = None
     target_account_id: str | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
+    keywords: str | None = None
 
 
 class TransactionListSchema(EntityModel):
@@ -100,3 +103,15 @@ class TransactionSummarySchema(BaseModel):
     income: int = 0
     expense: int = 0
     balance: int = 0
+
+
+class CreateTransCategoryWordSchema(BaseModel):
+    category_id: str
+    words: list[str] = Field(max_length=100)
+    priority: int = Field(default=0)
+
+class TransCategoryWordItem(EntityModel):
+    id: int
+    words: list[str] = Field(default_factory=list)
+    priority: int
+    category: CategorySchema

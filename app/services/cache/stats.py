@@ -7,6 +7,7 @@ class OverviewMetricsCache(BaseCache):
     __KEY__ = CacheKey.OVERVIEW_METRICS.value
 
     def __init__(self, user_id, query: str):
+        self.user_id = user_id
         self.key = self.__KEY__.format(user_id, query)
 
     async def get(self):
@@ -16,13 +17,16 @@ class OverviewMetricsCache(BaseCache):
 
         return ret
 
-    async def add(self, data: DashboardMetrics, expire=30 * 60):
+    async def add(self, data: DashboardMetrics, expire=10 * 60):
        
         ret = await redcache.set(self.key, data.model_dump_json(), ex=expire)
         return ret
 
-    async def delete(self):
-        return await redcache.delete(self.key)
+    async def delete(self, include_all=False):
+        if not include_all:
+            return await redcache.delete(self.key)
+        else:
+            return await redcache.delete_prefix(self.__KEY__.format(self.user_id))
 
     async def exists(self):
         return await redcache.exists(self.key)

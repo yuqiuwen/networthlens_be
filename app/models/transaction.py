@@ -63,3 +63,26 @@ class TransactionTag(BaseModel):
 
     transaction_id = Column(String(21), primary_key=True)
     tag_id = Column(String(26), primary_key=True)
+
+
+class TransactionCategoryWord(BaseModel, TSModel, StateModel):
+    """交易单分类匹配词"""
+
+    __tablename__ = "transaction_category_reg_word"
+    __table_args__ = (
+        UniqueConstraint("user_id", "category_id", name=None),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    words = Column(ARRAY(String(30)), nullable=False)
+    category_id = Column(String(26), nullable=False)
+    priority = Column(Integer, nullable=False, default=0, server_default=text('0'))
+    description = Column(String(100), comment="描述")
+
+    category = relationship(
+        "Category",
+        primaryjoin="foreign(TransactionCategoryWord.category_id) == Category.id",
+        viewonly=True,
+        lazy="selectin",
+    )

@@ -138,7 +138,7 @@ class CashFlowTrend(BaseModel):
 
 class ExpenseCategoryItem(BaseModel):
     category_id: str | None
-    category_name: str
+    category_name: str | None
 
     amount: Decimal
 

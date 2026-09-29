@@ -122,9 +122,11 @@ class BaseMixin(Generic[Model]):
     async def save(self, session: AsyncSession, instance: Model, commit=True):
         try:
             session.add(instance)
-            await session.flush()
+            
             if commit:
                 await session.commit()
+            else:
+                await session.flush()
         except Exception as e:
             await session.rollback()
             raise e

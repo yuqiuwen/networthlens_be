@@ -1,13 +1,16 @@
 from datetime import datetime
-from typing import Literal
+import keyword
+from typing import List, Literal
 from fastapi import Depends, UploadFile
 from app.core.dependencies import RequireAuthDep, SessionDep
 from app.core.http_handler import PageRespModel, RespModel
 from app.constant import TransactionType
 from app.routers import BaseAPIRouter
 from app.schemas.transaction import (
+    CreateTransCategoryWordSchema,
     CreateTransactionSchema,
     ImportTransactionSchema,
+    TransCategoryWordItem,
     TransactionDetailSchema,
     TransactionListSchema,
     TransactionQuerySchema,
@@ -19,6 +22,68 @@ from app.services.transaction import TransactionService
 
 
 router = BaseAPIRouter(prefix="/transaction", tags=["流水管理"])
+
+
+@router.post("/category_word", summary="创建分类匹配词")
+async def create_category_word(
+    session: SessionDep,
+    cur_user: RequireAuthDep,
+    data: CreateTransCategoryWordSchema
+):
+    data = await TransactionService().create_trans_category_word(
+        session,
+        cur_user.id,
+        data,
+    )
+
+    return make_response(data=data)
+
+
+@router.put("/category_word/{pk}", summary="修改分类匹配词")
+async def update_category_word(
+    pk: int,
+    session: SessionDep,
+    cur_user: RequireAuthDep,
+    data: CreateTransCategoryWordSchema
+):
+    data = await TransactionService().update_trans_category_word(
+        session,
+        cur_user.id,
+        pk,
+        data.words,
+    )
+
+    return make_response(data=data)
+
+
+@router.get("/category_word", summary="获取分类匹配词", response_model=RespModel[List[TransCategoryWordItem]])
+async def list_category_word(
+    session: SessionDep,
+    cur_user: RequireAuthDep,
+):
+    data = await TransactionService().list_trans_category_word(
+        session,
+        cur_user.id,
+    )
+
+    return make_response(data=data)
+
+
+
+@router.delete("/category_word", summary="删除分类匹配词")
+async def delete_category_word(
+    session: SessionDep,
+    cur_user: RequireAuthDep,
+    data: List[int]
+):
+    data = await TransactionService().delete_trans_category_word(
+        session,
+        cur_user.id,
+        data,
+    )
+
+    return make_response(data=data)
+
 
 
 @router.post("", summary="创建流水", response_model=RespModel[str])
@@ -49,7 +114,8 @@ async def summarize_transaction(
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     category_id: str | None = None,
-    target_account_id: str | None = None
+    target_account_id: str | None = None,
+    keywords: str | None = None,
 ):
     if category_id:
         category_id = [str(x.strip()) for x in category_id.split(",")]
@@ -63,7 +129,8 @@ async def summarize_transaction(
         start_time=start_time,
         end_time=end_time,
         category_id=category_id,
-        target_account_id=target_account_id
+        target_account_id=target_account_id,
+        keywords=keywords
     )
     return make_response(data=data)
 
@@ -116,3 +183,5 @@ async def import_transaction(
     )
 
     return make_response(data=data)
+
+
