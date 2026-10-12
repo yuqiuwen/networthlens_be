@@ -30,7 +30,7 @@ class TransactionRepo(BaseMixin[Transaction]):
         self,
         user_id: int,
         *,
-        transaction_type=None,
+        transaction_type: Sequence[TransactionType] | TransactionType | None = None,
         category_id: List[str] = None,
         source_account_id=None,
         target_account_id: List[str] = None,
@@ -44,7 +44,10 @@ class TransactionRepo(BaseMixin[Transaction]):
         ]
 
         if transaction_type:
-            cond.append(self.model.transaction_type == transaction_type)
+            if isinstance(transaction_type, TransactionType):
+                cond.append(self.model.transaction_type == transaction_type)
+            else:
+                cond.append(self.model.transaction_type.in_(transaction_type))
 
         if category_id:
             if len(category_id) == 1:
